@@ -1,29 +1,29 @@
+# -------------------------------
+# DogBot Datenmodelle für Diagnose
+# -------------------------------
+# Aufgabe: Strukturierung der Daten (Symptom-Infos, Rückfragen, Antworten)
+# Verwendung mit Pydantic für saubere Datentypen und Validierung
+
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import List
 
-class RueckfrageAntwort(BaseModel):
-    frage: str
-    antwort: str
+# ---------------------------------------
+# Modell für eine Instinktvariante eines Symptoms
+# ---------------------------------------
+class Instinktvariante(BaseModel):
+    instinkt: str           # Name des Instinkts (z.B. Jagdinstinkt)
+    beschreibung: str       # Beschreibung, wie sich der Instinkt beim Symptom zeigen könnte
 
-class DiagnoseAntwort(BaseModel):
-    symptom: str
-    rueckfragen: List[RueckfrageAntwort]
-
-class Instinktvarianten(BaseModel):
-    jagdinstinkt: Optional[str] = None
-    rudelinstinkt: Optional[str] = None
-    territorialinstinkt: Optional[str] = None
-    sexualinstinkt: Optional[str] = None
-
+# ---------------------------------------
+# Modell für allgemeine Informationen zu einem Symptom
+# ---------------------------------------
 class SymptomInfo(BaseModel):
-    symptom_name: str
-    beschreibung: Optional[str] = None
-    instinktvarianten: Instinktvarianten
+    symptom: str                     # Name oder kurze Beschreibung des Symptoms
+    instinktvarianten: List[Instinktvariante]  # Liste der zugeordneten Instinktvarianten
 
-    @classmethod
-    def from_dict(cls, data: dict):
-        return cls(
-            symptom_name=data.get("symptom_name", ""),
-            beschreibung=data.get("beschreibung"),
-            instinktvarianten=Instinktvarianten(**data.get("instinktvarianten", {}))
-        )
+# ---------------------------------------
+# Modell für eine Rückfrage-Antwort-Kombination
+# ---------------------------------------
+class RueckfrageAntwort(BaseModel):
+    frage: str    # Die gestellte Rückfrage
+    antwort: str  # Die Antwort des Benutzers ("Ja", "Nein", "Unklar", etc.)
