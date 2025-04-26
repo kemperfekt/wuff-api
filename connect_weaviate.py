@@ -1,30 +1,16 @@
-# -------------------------------
-# DogBot Weaviate Verbindung
-# -------------------------------
-# Aufgabe: Verbindungsaufbau zu Weaviate-Server
-# - Wird von anderen Modulen (z.B. symptom_tools) genutzt
-# - Macht das Projekt modularer und übersichtlicher
-
-import weaviate
 import os
+import weaviate
+from weaviate.classes.init import Auth
 
-def connect_weaviate() -> weaviate.Client:
-    """
-    Stellt eine Verbindung zu Weaviate her.
-    Nutzt Umgebungsvariablen WEAVIATE_URL und OPENAIAPIKEY (optional).
-    """
-    weaviate_url = os.getenv("WEAVIATE_URL")
-    if not weaviate_url:
-        raise EnvironmentError("WEAVIATE_URL ist nicht gesetzt.")
+weaviate_url = os.getenv("WEAVIATE_URL")
+weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+openai_api_key = os.getenv("OPENAI_APIKEY")
 
-    openai_key = os.getenv("OPENAIAPIKEY")
-
-    client = weaviate.Client(
-        url=weaviate_url,
-        auth_client_secret=None,  # Auth deaktiviert für lokale Nutzung
-        additional_headers={
-            "X-OpenAI-Api-Key": openai_key
-        } if openai_key else {}
+def get_weaviate_client():
+    return weaviate.connect_to_weaviate_cloud(
+        cluster_url=weaviate_url,
+        auth_credentials=Auth.api_key(weaviate_api_key),
+        headers={
+            "X-Openai-Api-Key": openai_api_key
+        }
     )
-
-    return client

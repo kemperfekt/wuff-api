@@ -1,43 +1,51 @@
-# -------------------------------
-# DogBot Weaviate Tools
-# -------------------------------
-# Aufgabe: Abfrage von Symptom-Informationen aus Weaviate
-# - Liefert strukturierte Infos zu einem Symptom (z.B. Instinktvarianten)
 
-import weaviate
-import os
+from connect_weaviate import get_weaviate_client
+from weaviate.classes.query import Filter
 
-# Verbindung zu Weaviate-Server herstellen
-client = weaviate.Client(
-    url=os.getenv("WEAVIATE_URL"),  # Beispiel: "http://localhost:8080"
-    auth_client_secret=None,         # Authentifizierung aktuell nicht aktiv
-    additional_headers={
-        "X-OpenAI-Api-Key": os.getenv("OPENAIAPIKEY")  # Falls Vektorizer OpenAI nutzt
-    }
-)
+def get_symptom_info(symptom_input: str) -> dict:
+    client = get_weaviate_client()
 
-# ---------------------------------------
-# Holt ein Symptom-Dokument aus Weaviate anhand des Namens
-# ---------------------------------------
-def get_symptom_info(symptom_name: str) -> dict:
-    """
-    Holt strukturierte Informationen über ein Symptom aus Weaviate.
-    Liefert z.B. Symptom-Name, zugeordnete Instinktvarianten etc.
-    """
+    try:
+        # Suche nach symptom_name (wie im Weaviate-Schema)
+        where_filter = Filter.by_property("symptom_name").equal(symptom_input)
 
-    # GraphQL-Query an Weaviate senden
-    response = client.query.get(
-        "Symptom",                # Collection / Klasse in Weaviate
-        ["symptom", "instinktvarianten { instinkt beschreibung }"]  # Gewünschte Felder
-    ).with_where({
-        "path": ["symptom"],
-        "operator": "Equal",
-        "valueText": symptom_name
-    }).with_limit(1).do()
+        response = client.collections.get("Symptom").query.fetch_objects(
+            filters=where_filter,
+            limit=1
+        )
 
-    # Ausgabe prüfen
-    symptome = response.get("data", {}).get("Get", {}).get("Symptom", [])
-    if not symptome:
-        raise ValueError(f"Symptom '{symptom_name}' nicht gefunden.")
+        if not response.objects:
+            return {"fehler": f"Symptom '{symptom_input}' nicht gefunden."}
 
-    return symptome[0]
+        raw_data = response.objects[0].properties
+
+        # Feldübernahme exakt wie im Weaviate-Modell
+        mapped_data = {
+            "symptom_name": raw_data.get("symptom_name", ""),
+            "instinktvarianten": []
+        }
+
+        # Optional: Falls instinkt_varianten (alt) vorhanden ist
+        instinkt_dict = raw_data.get("instinkt_varianten", {})
+        instinkt_mapping = {
+            "jagd": "Jagdinstinkt",
+            "rudel": "Rudelinstinkt",
+            "territorial": "Territorialinstinkt",
+            "sexual": "Sexualinstinkt"
+        }
+
+        for key, instinkt_name in instinkt_mapping.items():
+            beschreibung = instinkt_dict.get(key)
+            if beschreibung:
+                mapped_data["instinktvarianten"].append({
+                    "instinkt": instinkt_name,
+                    "beschreibung": beschreibung
+                })
+
+        return mapped_data
+
+    except Exception as e:
+        return {"fehler": f"Fehler bei der Weaviate-Abfrage: {str(e)}"}
+
+    finally:
+        client.close()
