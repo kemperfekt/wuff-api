@@ -7,7 +7,7 @@ import os
 import json
 from openai import OpenAI
 from pydantic import BaseModel
-from weaviate_ops.symptom_tools import get_symptom_info
+from weaviate_ops.symptom_tools import get_symptom_info, is_valid_symptom_info
 from symptom_models import SymptomInfo
 
 # -----------------------------------------------
@@ -67,6 +67,9 @@ def run_diagnose_agent(symptom_input: str) -> list:
     symptom_name = args.get("symptom_name")
 
     tool_response_dict = get_symptom_info(symptom_name)
+    if not is_valid_symptom_info(tool_response_dict):
+        return [f"Fehler bei der Symptomabfrage: {tool_response_dict.get('fehler', 'Unbekanntes Symptom')}"]
+
     symptom_info = SymptomInfo(**tool_response_dict)
 
     follow_up = client.chat.completions.create(
