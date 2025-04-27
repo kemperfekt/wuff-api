@@ -16,8 +16,6 @@
 
     ## 🧪 Start the Agent
     bash
-    Kopieren
-    Bearbeiten
     uvicorn main:app --reload
     # Available at http://localhost:8000/docs
 

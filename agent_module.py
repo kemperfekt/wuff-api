@@ -1,67 +1,120 @@
 # -----------------------------------------------
 # DogBot - Agent Module (Diagnose und Interaktion)
+# (Agentic RAG: GPT + Tool-Use + Weaviate)
 # -----------------------------------------------
 
 import os
-from openai import OpenAI
-from weaviate_ops.symptom_tools import get_symptom_info
-from connect_weaviate import get_weaviate_client
-from pydantic import BaseModel
-from symptom_models import SymptomInfo, Instinktvariante, RueckfrageAntwort
 import json
+from openai import OpenAI
+from pydantic import BaseModel
+from weaviate_ops.symptom_tools import get_symptom_info
+from symptom_models import SymptomInfo
+
+# -----------------------------------------------
+# OpenAI Client initialisieren
+# -----------------------------------------------
+
+api_key = os.getenv("OPENAI_APIKEY")
+if not api_key:
+    raise EnvironmentError("OPENAI_APIKEY ist nicht gesetzt.")
+
+client = OpenAI(api_key=api_key)
 
 # -----------------------------------------------
 # Diagnose-Agent: Startet die Diagnose
 # -----------------------------------------------
+
 def run_diagnose_agent(symptom_input: str) -> list:
     """
-    Holt Symptomdaten und generiert Rückfragen.
+    Holt Symptomdaten über GPT (Tool-Use) und generiert Rückfragen.
     Gibt alle Rückfragen als Liste zurück.
     """
-    symptom_info_dict = get_symptom_info(symptom_input)
+    system_prompt = (
+        "Du bist ein Diagnose-Agent. Hole Informationen über das Symptom mit dem Tool get_symptom_info "
+        "und formuliere für jede relevante Instinktvariante eine gezielte Ja-/Nein-Rückfrage."
+    )
 
-    if isinstance(symptom_info_dict, str) or "fehler" in symptom_info_dict:
-        return [f"Fehler bei der Abfrage: {symptom_info_dict}"]
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Symptom: {symptom_input}"}
+        ],
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_symptom_info",
+                    "description": "Liefert strukturierte Informationen über ein Symptom inklusive Instinktvarianten.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "symptom_name": {"type": "string"}
+                        },
+                        "required": ["symptom_name"]
+                    }
+                }
+            }
+        ],
+        tool_choice="auto"
+    )
 
-    try:
-        symptom_info = SymptomInfo(**symptom_info_dict)
-    except Exception as e:
-        return [f"Fehler beim Verarbeiten der Symptomdaten: {e}"]
+    message = response.choices[0].message
+    if not message.tool_calls:
+        return ["Fehler beim Tool-Call."]
 
-    questions = generate_followup_questions(symptom_info)
+    args = json.loads(message.tool_calls[0].function.arguments)
+    symptom_name = args.get("symptom_name")
 
-    if questions:
-        return questions
-    else:
-        return ["Keine Rückfragen verfügbar. Bitte kontaktieren Sie den Support."]
+    tool_response_dict = get_symptom_info(symptom_name)
+    symptom_info = SymptomInfo(**tool_response_dict)
+
+    follow_up = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Symptom: {symptom_input}"},
+            message,
+            {
+                "role": "tool",
+                "tool_call_id": message.tool_calls[0].id,
+                "name": message.tool_calls[0].function.name,
+                "content": json.dumps(tool_response_dict, ensure_ascii=False)
+            }
+        ]
+    )
+
+    rückfragen = [frage.strip() for frage in follow_up.choices[0].message.content.split("\n") if frage.strip()]
+    return rückfragen
 
 # -----------------------------------------------
-# Generiert Rückfragen basierend auf Instinkten
+# Diagnose-Agent: Erstellt finale Diagnose
 # -----------------------------------------------
-def generate_followup_questions(symptom_info: SymptomInfo) -> list:
-    questions = []
 
-    for instinktvariante in symptom_info.instinktvarianten:
-        if instinktvariante.instinkt == "Jagdinstinkt":
-            questions.append("Zeigt dein Hund Interesse an bewegenden Objekten?")
-        elif instinktvariante.instinkt == "Rudelinstinkt":
-            questions.append("Ist dein Hund besonders an anderen Menschen oder Hunden interessiert?")
-        elif instinktvariante.instinkt == "Territorialinstinkt":
-            questions.append("Wacht dein Hund über bestimmte Orte in deinem Zuhause?")
-        elif instinktvariante.instinkt == "Sexualinstinkt":
-            questions.append("Hat dein Hund ein starkes Interesse an Hündinnen oder Rüden?")
+def generate_final_diagnosis(symptom: str, questions: list, answers: list) -> str:
+    """
+    Analysiert Antworten und erstellt auf Basis der Antworten eine Diagnose.
+    """
+    diagnose_prompt = (
+        "Du bist ein Diagnose-Agent. Bestimme auf Basis der Antworten den wahrscheinlichsten Instinkt "
+        "(Jagdinstinkt, Rudelinstinkt, Territorialinstinkt oder Sexualinstinkt). "
+        "Falls die Antworten unklar sind, bilde eine Hypothese basierend auf dem Symptom."
+    )
 
-    if not questions:
-        raise ValueError("Keine Rückfragen basierend auf den Instinkten generiert.")
+    antworten_liste = [{"frage": frage, "antwort": antwort} for frage, antwort in zip(questions, answers)]
 
-    return questions
+    diagnose_response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": diagnose_prompt},
+            {"role": "user", "content": f"Symptom: {symptom}\nAntworten: {json.dumps(antworten_liste, ensure_ascii=False)}"}
+        ]
+    )
+
+    return diagnose_response.choices[0].message.content
 
 # -----------------------------------------------
-# Generiert die finale Diagnose
+# Hinweis:
+# - GPT ruft Weaviate indirekt via get_symptom_info auf.
+# - GPT erstellt selbstständig Rückfragen und Diagnosen.
 # -----------------------------------------------
-def generate_final_diagnosis(symptom: str, answers: list) -> str:
-    if any("Jagd" in answer for answer in answers):
-        return f"Die Diagnose für das Symptom '{symptom}' könnte mit einem erhöhten Jagdinstinkt zusammenhängen."
-    if any("Rudel" in answer for answer in answers):
-        return f"Das Symptom '{symptom}' weist möglicherweise auf einen hohen Rudelinstinkt hin."
-    return f"Das Symptom '{symptom}' bleibt unklar. Weitere Untersuchung notwendig."

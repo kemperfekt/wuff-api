@@ -1,12 +1,15 @@
-
+import os
 from connect_weaviate import get_weaviate_client
 from weaviate.classes.query import Filter
+from symptom_models import SymptomInfo
 
 def get_symptom_info(symptom_input: str) -> dict:
+    """
+    Ruft Symptomdaten aus Weaviate ab und validiert sie über das SymptomInfo-Modell.
+    """
     client = get_weaviate_client()
 
     try:
-        # Suche nach symptom_name (wie im Weaviate-Schema)
         where_filter = Filter.by_property("symptom_name").equal(symptom_input)
 
         response = client.collections.get("Symptom").query.fetch_objects(
@@ -19,13 +22,11 @@ def get_symptom_info(symptom_input: str) -> dict:
 
         raw_data = response.objects[0].properties
 
-        # Feldübernahme exakt wie im Weaviate-Modell
         mapped_data = {
             "symptom_name": raw_data.get("symptom_name", ""),
             "instinktvarianten": []
         }
 
-        # Optional: Falls instinkt_varianten (alt) vorhanden ist
         instinkt_dict = raw_data.get("instinkt_varianten", {})
         instinkt_mapping = {
             "jagd": "Jagdinstinkt",
@@ -42,10 +43,24 @@ def get_symptom_info(symptom_input: str) -> dict:
                     "beschreibung": beschreibung
                 })
 
-        return mapped_data
+        # Validierung und saubere Rückgabe
+        symptom_info = SymptomInfo(**mapped_data)
+        return symptom_info.model_dump()
 
     except Exception as e:
         return {"fehler": f"Fehler bei der Weaviate-Abfrage: {str(e)}"}
 
     finally:
         client.close()
+
+def is_valid_symptom_info(data: dict) -> bool:
+    """
+    Prüft, ob ein SymptomInfo-Datensatz valide ist (kein Fehler enthalten).
+    """
+    if not isinstance(data, dict):
+        return False
+    if "fehler" in data:
+        return False
+    if "symptom_name" not in data or "instinktvarianten" not in data:
+        return False
+    return True
