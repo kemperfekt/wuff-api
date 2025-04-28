@@ -14,11 +14,15 @@ from symptom_models import SymptomInfo
 # OpenAI Client initialisieren
 # -----------------------------------------------
 
-api_key = os.getenv("OPENAI_APIKEY")
-if not api_key:
-    raise EnvironmentError("OPENAI_APIKEY ist nicht gesetzt.")
+client = None  # Wird später initialisiert
 
-client = OpenAI(api_key=api_key)
+def init_openai_client():
+    global client
+    if client is None:
+        api_key = os.getenv("OPENAI_APIKEY")
+        if not api_key:
+            raise EnvironmentError("OPENAI_APIKEY ist nicht gesetzt.")
+        client = OpenAI(api_key=api_key)
 
 # -----------------------------------------------
 # Diagnose-Agent: Startet die Diagnose
@@ -29,6 +33,8 @@ def run_diagnose_agent(symptom_input: str) -> list:
     Holt Symptomdaten über GPT (Tool-Use) und generiert Rückfragen.
     Gibt alle Rückfragen als Liste zurück.
     """
+    init_openai_client()
+
     system_prompt = (
         "Du bist ein Diagnose-Agent. Hole Informationen über das Symptom mit dem Tool get_symptom_info "
         "und formuliere für jede relevante Instinktvariante eine gezielte Ja-/Nein-Rückfrage."
@@ -70,7 +76,7 @@ def run_diagnose_agent(symptom_input: str) -> list:
     if not is_valid_symptom_info(tool_response_dict):
         return [f"Fehler bei der Symptomabfrage: {tool_response_dict.get('fehler', 'Unbekanntes Symptom')}"]
 
-    symptom_info = SymptomInfo(**tool_response_dict)
+    # symptom_info = SymptomInfo(**tool_response_dict)
 
     follow_up = client.chat.completions.create(
         model="gpt-4",
@@ -98,6 +104,8 @@ def generate_final_diagnosis(symptom: str, questions: list, answers: list) -> st
     """
     Analysiert Antworten und erstellt auf Basis der Antworten eine Diagnose.
     """
+    init_openai_client()
+
     diagnose_prompt = (
         "Du bist ein Diagnose-Agent. Bestimme auf Basis der Antworten den wahrscheinlichsten Instinkt "
         "(Jagdinstinkt, Rudelinstinkt, Territorialinstinkt oder Sexualinstinkt). "
@@ -115,9 +123,3 @@ def generate_final_diagnosis(symptom: str, questions: list, answers: list) -> st
     )
 
     return diagnose_response.choices[0].message.content
-
-# -----------------------------------------------
-# Hinweis:
-# - GPT ruft Weaviate indirekt via get_symptom_info auf.
-# - GPT erstellt selbstständig Rückfragen und Diagnosen.
-# -----------------------------------------------
