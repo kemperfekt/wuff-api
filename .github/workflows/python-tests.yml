@@ -28,5 +28,9 @@ jobs:
     - name: Tests ausführen
       env:
         OPENAI_APIKEY: ${{ secrets.OPENAI_APIKEY }}
+        WEAVIATE_URL: ${{ secrets.WEAVIATE_URL }}
+        WEAVIATE_API_KEY: ${{ secrets.WEAVIATE_API_KEY }}
       run: |
         python -m unittest discover -s tests
+
+
