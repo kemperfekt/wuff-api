@@ -77,7 +77,9 @@ async def diagnose_continue(answer: AnswerRequest):
         # Diagnose erstellen
         final_diagnosis = generate_final_diagnosis(
             symptom=session["symptom"],
+            questions=session["questions"],
             answers=session["answers"]
         )
+
         del sessions[answer.session_id]
         return DiagnoseResponse(session_id=answer.session_id, message=final_diagnosis, done=True)

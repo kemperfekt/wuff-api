@@ -1,19 +1,36 @@
 import os
+import weaviate
+from weaviate.classes.init import Auth
 from connect_weaviate import get_weaviate_client
 from weaviate.classes.query import Filter
-from symptom_models import SymptomInfo
 
+# Verbindungsparameter
+weaviate_url = os.getenv("WEAVIATE_URL")
+weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+openai_api_key = os.getenv("OPENAI_APIKEY")
+
+# -----------------------------------------------
+# Verbindungsaufbau zu Weaviate
+# -----------------------------------------------
+def get_weaviate_client():
+    return weaviate.connect_to_weaviate_cloud(
+        cluster_url=weaviate_url,
+        auth_credentials=Auth.api_key(weaviate_api_key),
+        headers={
+            "X-Openai-Api-Key": openai_api_key
+        }
+    )
+
+# -----------------------------------------------
+# Holt Symptom-Info basierend auf semantischer Suche
+# -----------------------------------------------
 def get_symptom_info(symptom_input: str) -> dict:
-    """
-    Ruft Symptomdaten aus Weaviate ab und validiert sie über das SymptomInfo-Modell.
-    """
     client = get_weaviate_client()
 
     try:
-        where_filter = Filter.by_property("symptom_name").equal(symptom_input)
-
-        response = client.collections.get("Symptom").query.fetch_objects(
-            filters=where_filter,
+        # Semantische Suche über near_text
+        response = client.collections.get("Symptom").query.near_text(
+            query=symptom_input,
             limit=1
         )
 
@@ -22,11 +39,13 @@ def get_symptom_info(symptom_input: str) -> dict:
 
         raw_data = response.objects[0].properties
 
+        # Feldübernahme exakt wie im Weaviate-Modell
         mapped_data = {
             "symptom_name": raw_data.get("symptom_name", ""),
             "instinktvarianten": []
         }
 
+        # Optional: Falls instinkt_varianten (alt) vorhanden ist
         instinkt_dict = raw_data.get("instinkt_varianten", {})
         instinkt_mapping = {
             "jagd": "Jagdinstinkt",
@@ -43,9 +62,7 @@ def get_symptom_info(symptom_input: str) -> dict:
                     "beschreibung": beschreibung
                 })
 
-        # Validierung und saubere Rückgabe
-        symptom_info = SymptomInfo(**mapped_data)
-        return symptom_info.model_dump()
+        return mapped_data
 
     except Exception as e:
         return {"fehler": f"Fehler bei der Weaviate-Abfrage: {str(e)}"}
@@ -53,14 +70,17 @@ def get_symptom_info(symptom_input: str) -> dict:
     finally:
         client.close()
 
+# -----------------------------------------------
+# Validiert SymptomInfo-Datenstruktur
+# -----------------------------------------------
 def is_valid_symptom_info(data: dict) -> bool:
     """
-    Prüft, ob ein SymptomInfo-Datensatz valide ist (kein Fehler enthalten).
+    Prüft, ob ein Dict eine valide SymptomInfo-Datenstruktur darstellt.
     """
     if not isinstance(data, dict):
         return False
-    if "fehler" in data:
-        return False
     if "symptom_name" not in data or "instinktvarianten" not in data:
+        return False
+    if not isinstance(data["instinktvarianten"], list):
         return False
     return True
