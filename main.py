@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from agent_module import run_diagnose_agent, generate_final_diagnosis
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uuid
 
 # FastAPI App-Instanz erstellen
