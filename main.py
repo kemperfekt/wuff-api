@@ -37,6 +37,15 @@ class DiagnoseResponse(BaseModel):
     done: bool = False
 
 # ---------------------------------------
+# POST /
+# verhindert 404
+# ---------------------------------------
+
+@app.get("/")
+async def root():
+    return JSONResponse(content={"message": "DogBot Backend is running."})
+
+# ---------------------------------------
 # POST /diagnose_start
 # Startet eine neue Diagnose-Session
 # ---------------------------------------
