@@ -1,5 +1,5 @@
 import unittest
-from agent_module import run_diagnose_agent
+from src.agents.diagnose_agent import run_diagnose_agent
 
 class DiagnoseAgentTestCase(unittest.TestCase):
     def test_run_diagnose_agent_with_known_symptom(self):
