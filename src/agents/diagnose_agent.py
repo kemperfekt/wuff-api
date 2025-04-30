@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from src.models.symptom_models import SymptomInfo  
 from src.models.instinct_models import InstinctClassification
+from src.services.retrieval import get_symptom_info, get_breed_info
 
 # Stelle sicher, dass deine openai-Package-Version >= 0.27.0 ist,
 # damit Function Calling unterstützt wird.

@@ -1,86 +1,84 @@
+# src/services/retrieval.py
+
 import os
-import weaviate
-from weaviate.classes.init import Auth
-from connect_weaviate import get_weaviate_client
-from weaviate.classes.query import Filter
+from fastapi import HTTPException
+from typing import List
 
-# Verbindungsparameter
-weaviate_url = os.getenv("WEAVIATE_URL")
-weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
-openai_api_key = os.getenv("OPENAI_APIKEY")
+from pydantic import ValidationError
+from weaviate import Client
 
-# -----------------------------------------------
-# Verbindungsaufbau zu Weaviate
-# -----------------------------------------------
-def get_weaviate_client():
-    return weaviate.connect_to_weaviate_cloud(
-        cluster_url=weaviate_url,
-        auth_credentials=Auth.api_key(weaviate_api_key),
-        headers={
-            "X-Openai-Api-Key": openai_api_key
-        }
-    )
+from services.weaviate_client import get_weaviate_client
+from src.models.symptom_models import SymptomInfo
+from src.models.breed_models import BreedInfo
 
-# -----------------------------------------------
-# Holt Symptom-Info basierend auf semantischer Suche
-# -----------------------------------------------
-def get_symptom_info(symptom_input: str) -> dict:
-    client = get_weaviate_client()
+
+def get_symptom_info(symptom_input: str) -> SymptomInfo:
+    """
+    Semantische Suche in der Weaviate-Collection "Symptom" mit dem v4-Client.
+
+    Args:
+        symptom_input: Freitext-Eingabe des Nutzers zum Symptom
+                       (z.B. "hund zieht an der leine").
+
+    Returns:
+        SymptomInfo: Pydantic-Modell mit den Feldern symptom_name und instinktvarianten.
+    """
+    client: Client = get_weaviate_client()
 
     try:
-        # Semantische Suche über near_text
-        response = client.collections.get("Symptom").query.near_text(
-            query=symptom_input,
-            limit=1
+        # Native v4: Collection-Objekt holen
+        collection = client.collections.get("Symptom")
+        # Query ausführen: Vektorbasierte Suche via nearText
+        resp = (
+            collection.query
+                      .with_near_text({"concepts": [symptom_input]})
+                      .with_limit(1)
+                      .do()
         )
-
-        if not response.objects:
-            return {"fehler": f"Symptom '{symptom_input}' nicht gefunden."}
-
-        raw_data = response.objects[0].properties
-
-        # Feldübernahme exakt wie im Weaviate-Modell
-        mapped_data = {
-            "symptom_name": raw_data.get("symptom_name", ""),
-            "instinktvarianten": []
-        }
-
-        # Optional: Falls instinkt_varianten (alt) vorhanden ist
-        instinkt_dict = raw_data.get("instinkt_varianten", {})
-        instinkt_mapping = {
-            "jagd": "Jagdinstinkt",
-            "rudel": "Rudelinstinkt",
-            "territorial": "Territorialinstinkt",
-            "sexual": "Sexualinstinkt"
-        }
-
-        for key, instinkt_name in instinkt_mapping.items():
-            beschreibung = instinkt_dict.get(key)
-            if beschreibung:
-                mapped_data["instinktvarianten"].append({
-                    "instinkt": instinkt_name,
-                    "beschreibung": beschreibung
-                })
-
-        return mapped_data
-
     except Exception as e:
-        return {"fehler": f"Fehler bei der Weaviate-Abfrage: {str(e)}"}
+        raise HTTPException(status_code=500, detail=f"Weaviate-Abfrage fehlgeschlagen: {e}")
 
-    finally:
-        client.close()
+    try:
+        # resp.objects ist Liste von Objekten mit Attribut .properties
+        objs = resp.objects
+        if not objs:
+            raise HTTPException(status_code=404, detail="Kein Symptom-Muster gefunden")
+        props = objs[0].properties
+        # Pydantic-Validierung
+        return SymptomInfo.parse_obj(props)
+    except (AttributeError, ValidationError) as e:
+        raise HTTPException(status_code=500, detail=f"SymptomInfo-Parsing fehlgeschlagen: {e}")
 
-# -----------------------------------------------
-# Validiert SymptomInfo-Datenstruktur
-# -----------------------------------------------
-def is_valid_symptom_info(data: dict) -> bool:
+
+def get_breed_info(breed: str) -> BreedInfo:
     """
-    Prüft, ob ein Dict eine valide SymptomInfo-Datenstruktur darstellt.
+    Semantische Suche in der Weaviate-Collection "BreedGroup" mit dem v4-Client.
+
+    Args:
+        breed: Name oder Stichwort zur Hunderasse (z.B. "Labrador").
+
+    Returns:
+        BreedInfo: Pydantic-Modell mit den Feldern group_name, function,
+                   features, requirements und instinct_score.
     """
-    if not isinstance(data, dict):
-        return False
-    if "symptom_name" not in data or "instinktvarianten" not in data:
-        return False
-    if not isinstance(data["instinktvarianten"], list):
-        return False
-    return True
+    client: Client = get_weaviate_client()
+
+    try:
+        collection = client.collections.get("BreedGroup")
+        resp = (
+            collection.query
+                      .with_near_text({"concepts": [breed]})
+                      .with_limit(1)
+                      .do()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Weaviate-Abfrage fehlgeschlagen: {e}")
+
+    try:
+        objs = resp.objects
+        if not objs:
+            raise HTTPException(status_code=404, detail="Keine passende Rasse-Gruppe gefunden")
+        props = objs[0].properties
+        return BreedInfo.parse_obj(props)
+    except (AttributeError, ValidationError) as e:
+        raise HTTPException(status_code=500, detail=f"BreedInfo-Parsing fehlgeschlagen: {e}")
