@@ -23,5 +23,7 @@ venv/
 #UI
 assets/
 
-# OS
+# Misc
 .DS_Store
+tech_strategy.md
+modules.png
