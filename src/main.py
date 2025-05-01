@@ -1,95 +1,76 @@
-# -------------------------------
-# DogBot Diagnose Server (FastAPI)
-# -------------------------------
+# src/main.py
 
-from fastapi import FastAPI
-from pydantic import BaseModel
-from src.agents.diagnose_agent import run_diagnose_agent, generate_final_diagnosis
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+import logging
 import uuid
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
-# FastAPI App-Instanz erstellen
+from src.models.flow_models import DiagnoseStart, DiagnoseContinue
+from src.agents.diagnose_agent import run_diagnose_agent, generate_final_diagnosis
+
+# --- Logging Setup ---
+logger = logging.getLogger("uvicorn.error")
+
+# --- FastAPI App ---
 app = FastAPI()
-
-# CORS aktivieren
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# In-Memory Session Store
+# In-Memory Session Store: session_id -> history
 sessions = {}
 
-# Request- und Response-Modelle
-class SymptomRequest(BaseModel):
-    symptom_input: str
+@app.get("/", tags=["Health"])
+def health_check():
+    logger.debug("Health check requested")
+    return {"status": "ok"}
 
-class AnswerRequest(BaseModel):
-    session_id: str
-    answer: str
+@app.post("/diagnose_start", tags=["Diagnosis"])
+def diagnose_start(body: DiagnoseStart):
+    logger.debug(f"Received diagnose_start with symptom_input='{body.symptom_input}'")
+    try:
+        session_id = str(uuid.uuid4())
+        sessions[session_id] = []
 
-class DiagnoseResponse(BaseModel):
-    session_id: str
-    message: str
-    done: bool = False
+        questions = run_diagnose_agent(body.symptom_input)
+        question = questions[0] if questions else "Leider konnte keine Frage generiert werden."
+        sessions[session_id].append({"role": "assistant", "content": question})
+        logger.debug(f"Session {session_id} started, first question: {question}")
 
-# ---------------------------------------
-# POST /
-# verhindert 404
-# ---------------------------------------
+        return {
+            "session_id": session_id,
+            "message": question,
+            "done": False
+        }
+    except Exception as e:
+        logger.error(f"Error in diagnose_start: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/")
-async def root():
-    return JSONResponse(content={"message": "DogBot Backend is running."})
+@app.post("/diagnose_continue", tags=["Diagnosis"])
+def diagnose_continue(body: DiagnoseContinue):
+    logger.debug(f"Received diagnose_continue for session_id='{body.session_id}' with message='{body.message}'")
+    history = sessions.get(body.session_id)
+    if history is None:
+        logger.warning(f"Session {body.session_id} not found")
+        raise HTTPException(status_code=404, detail="Session not found")
 
-# ---------------------------------------
-# POST /diagnose_start
-# Startet eine neue Diagnose-Session
-# ---------------------------------------
-@app.post("/diagnose_start", response_model=DiagnoseResponse)
-async def diagnose_start(symptom: SymptomRequest):
-    session_id = str(uuid.uuid4())
-    
-    # Fragen über Agent erzeugen
-    questions = run_diagnose_agent(symptom.symptom_input)
+    history.append({"role": "user", "content": body.message})
+    try:
+        last_msg = history[-1]["content"]
+        questions = run_diagnose_agent(last_msg)
+        message = questions[0] if questions else "Keine weitere Frage verfügbar."
+        done = False
 
-    # Session speichern
-    sessions[session_id] = {
-        "symptom": symptom.symptom_input,
-        "questions": questions,
-        "answers": []
-    }
+        sessions[body.session_id].append({"role": "assistant", "content": message})
+        logger.debug(f"Session {body.session_id} responded with: {message}")
 
-    # Erste Frage zurückgeben
-    return DiagnoseResponse(session_id=session_id, message=questions[0], done=False)
-
-# ---------------------------------------
-# POST /diagnose_continue
-# Antwort entgegennehmen und fortfahren
-# ---------------------------------------
-@app.post("/diagnose_continue", response_model=DiagnoseResponse)
-async def diagnose_continue(answer: AnswerRequest):
-    session = sessions.get(answer.session_id)
-    if not session:
-        return DiagnoseResponse(session_id=answer.session_id, message="Session nicht gefunden.", done=True)
-
-    # Antwort speichern
-    session["answers"].append(answer.answer)
-
-    if len(session["answers"]) < len(session["questions"]):
-        next_question = session["questions"][len(session["answers"])]
-        return DiagnoseResponse(session_id=answer.session_id, message=next_question, done=False)
-    else:
-        # Diagnose erstellen
-        final_diagnosis = generate_final_diagnosis(
-            symptom=session["symptom"],
-            questions=session["questions"],
-            answers=session["answers"]
-        )
-
-        del sessions[answer.session_id]
-        return DiagnoseResponse(session_id=answer.session_id, message=final_diagnosis, done=True)
+        return {
+            "message": message,
+            "done": done
+        }
+    except Exception as e:
+        logger.error(f"Error in diagnose_continue: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

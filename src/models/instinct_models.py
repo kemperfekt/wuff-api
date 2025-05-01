@@ -1,20 +1,10 @@
-# ---------------------------------------------
-# Datei: src/models/instinct_models.py
-# Zweck: Pydantic-Modell für die Instinkt-Klassifikation,
-#        das wir per Function Calling zurückbekommen.
-# ---------------------------------------------
+# src/models/instinct_models.py
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List
 
 class InstinctClassification(BaseModel):
-    """
-    Modell für die Instinkt-Klassifikation.
-    Wird von GPT per Function Calling mit folgendem JSON befüllt:
-    {
-      "known_instincts": [...],
-      "uncertain_instincts": [...]
-    }
-    """
     known_instincts: List[str]
     uncertain_instincts: List[str]
+
+    model_config = ConfigDict(populate_by_name=True)
