@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from src.main import app
+from src.agents.flow_agent import run_full_flow as run_diagnose_agent
 
 client = TestClient(app)
 

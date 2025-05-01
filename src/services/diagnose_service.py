@@ -1,3 +1,5 @@
+# src/services/diagnose_service.py
+
 import os
 import json
 from typing import List, Dict, Any
@@ -6,6 +8,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 # Umgebungsvariable für OpenAI-Key
 openai.api_key = os.getenv("OPENAI_APIKEY")
+
 
 class FinalDiagnosisResponse(BaseModel):
     """
@@ -28,7 +31,6 @@ def get_final_diagnosis(session_log: List[Dict[str, Any]], known_facts: Dict[str
     :return: FinalDiagnosisResponse-Objekt mit message und details
     :raises RuntimeError: bei JSON-Parsing- oder Validierungsfehlern
     """
-    # Prompt zusammenstellen
     instructions = (
         "Du bist ein empathischer Diagnostik-Assistent. "
         "Basierend auf dem bisherigen Gesprächsverlauf und bekannten Fakten "
@@ -45,7 +47,6 @@ def get_final_diagnosis(session_log: List[Dict[str, Any]], known_facts: Dict[str
         {"role": "user", "content": json.dumps(prompt_content, ensure_ascii=False)}
     ]
 
-    # OpenAI-Request
     response = openai.ChatCompletion.create(
         model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         messages=messages,
@@ -53,7 +54,6 @@ def get_final_diagnosis(session_log: List[Dict[str, Any]], known_facts: Dict[str
     )
     raw = response.choices[0].message.content
 
-    # JSON parsen und validieren
     try:
         parsed = json.loads(raw)
         return FinalDiagnosisResponse(**parsed)

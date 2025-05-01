@@ -1,14 +1,17 @@
 # src/main.py
 
 import os
+import uuid
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
-from src.agents.diagnose_agent import run_diagnose_agent
+from src.agents.flow_agent import run_full_flow
+
+# Legacy-Alias für Tests – die Handler nutzen jetzt run_diagnose_agent
+run_diagnose_agent = run_full_flow
 
 app = FastAPI()
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,10 +32,8 @@ class DiagnoseStartResponse(BaseModel):
 
 @app.post("/diagnose_start", response_model=DiagnoseStartResponse)
 def diagnose_start(req: DiagnoseStartRequest):
-    # Erzeuge neue session_id, z.B. uuid:
-    import uuid
     sid = str(uuid.uuid4())
-    # Starte Flow wie bei continue, aber mit leerem State
+    # Nutze Alias
     result = run_diagnose_agent(sid, req.symptom_input)
     return {"session_id": sid, **result}
 
@@ -48,13 +49,13 @@ class DiagnoseResponse(BaseModel):
 @app.post("/diagnose_continue", response_model=DiagnoseResponse)
 def diagnose_continue(req: DiagnoseRequest):
     try:
-        # Hier wird run_diagnose_agent mit beiden Parametern aufgerufen
+        # Verwende Alias, nicht direkt run_full_flow
         result = run_diagnose_agent(req.session_id, req.user_input)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.getenv("PORT", 8000))
+    import uvicorn
     uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=True)

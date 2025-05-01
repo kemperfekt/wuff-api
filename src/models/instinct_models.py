@@ -1,10 +1,30 @@
-# src/models/instinct_models.py
-
-from pydantic import BaseModel, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any
 
 class InstinctClassification(BaseModel):
-    known_instincts: List[str]
-    uncertain_instincts: List[str]
+    """
+    Ergebnis der Instinkt-Klassifikation:
+    - known_instincts: klar erkannte Instinkte
+    - uncertain_instincts: Instinkte, zu denen Rückfragen nötig sind
+    """
+    known_instincts: List[str] = Field(...)
+    uncertain_instincts: List[str] = Field(...)
 
-    model_config = ConfigDict(populate_by_name=True)
+class InstinktVeranlagung(BaseModel):
+    """
+    Profil einer Instinktveranlagungsgruppe aus Weaviate:
+    - gruppen_code: Code der Gruppe
+    - gruppe: Name der Hauptgruppe
+    - untergruppe: Name der Untergruppe
+    - funktion: Ursprüngliche Funktion
+    - merkmale: Typische Merkmale
+    - anforderungen: Anforderungen an Haltung/Training
+    - instinkte: Gewichtung der einzelnen Instinkte
+    """
+    gruppen_code: str = Field(...)
+    gruppe: str = Field(...)
+    untergruppe: str = Field(...)
+    funktion: str = Field(...)
+    merkmale: str = Field(...)
+    anforderungen: str = Field(...)
+    instinkte: Dict[str, int] = Field(...)

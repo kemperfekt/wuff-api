@@ -1,36 +1,59 @@
 # tests/test_diagnose_service.py
 
+import os
 import json
 import pytest
+import openai
 from src.services.diagnose_service import get_final_diagnosis, FinalDiagnosisResponse
 
+# Fixture, um sicherzustellen, dass OPENAI_APIKEY gesetzt ist
+@pytest.fixture(autouse=True)
+def fix_api_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_APIKEY", "testkey")
+    yield
+    monkeypatch.delenv("OPENAI_APIKEY", raising=False)
+
+class DummyChoice:
+    def __init__(self, content: str):
+        self.message = type("M", (), {"content": content})
+
 class DummyResponse:
-    def __init__(self, content):
-        self.choices = [type("Choice", (), {"message": type("Message", (), {"content": content})})]
+    def __init__(self, content: str):
+        self.choices = [DummyChoice(content)]
 
 def test_get_final_diagnosis_success(monkeypatch):
-    dummy_payload = {"message": "Alles gut", "details": {"instinkt": "Beute"}}
-    dummy_content = json.dumps(dummy_payload)
-    def dummy_create(*args, **kwargs):
-        return DummyResponse(dummy_content)
+    # Stub OpenAI-Call mit gültiger JSON-Antwort
+    dummy_json = json.dumps({"message": "Diagnose OK", "details": {"foo": "bar"}})
     monkeypatch.setattr(
-        "src.services.diagnose_service.openai.ChatCompletion.create",
-        dummy_create
+        openai.ChatCompletion, "create",
+        lambda *args, **kwargs: DummyResponse(dummy_json)
     )
+
     session_log = [{"role": "user", "content": "Test"}]
-    known_facts = {"foo": "bar"}
-    result = get_final_diagnosis(session_log, known_facts)
-    assert isinstance(result, FinalDiagnosisResponse)
-    assert result.message == dummy_payload["message"]
-    assert result.details == dummy_payload["details"]
+    known_facts = {"symptom": "bellend"}
+    resp = get_final_diagnosis(session_log, known_facts)
+
+    assert isinstance(resp, FinalDiagnosisResponse)
+    assert resp.message == "Diagnose OK"
+    assert resp.details == {"foo": "bar"}
 
 def test_get_final_diagnosis_invalid_json(monkeypatch):
-    def dummy_create(*args, **kwargs):
-        return DummyResponse("nicht-json")
+    # Stub mit ungültigem JSON
     monkeypatch.setattr(
-        "src.services.diagnose_service.openai.ChatCompletion.create",
-        dummy_create
+        openai.ChatCompletion, "create",
+        lambda *args, **kwargs: DummyResponse("not a json")
     )
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(RuntimeError) as exc:
         get_final_diagnosis([], {})
-    assert "Fehler bei Verarbeitung der Diagnose-Antwort" in str(excinfo.value)
+    assert "Fehler bei Verarbeitung" in str(exc.value)
+
+def test_get_final_diagnosis_validation_error(monkeypatch):
+    # Stub mit JSON, das das Pydantic-Modell nicht erfüllt (fehlt 'message')
+    bad_json = json.dumps({"details": {}})
+    monkeypatch.setattr(
+        openai.ChatCompletion, "create",
+        lambda *args, **kwargs: DummyResponse(bad_json)
+    )
+    with pytest.raises(RuntimeError) as exc:
+        get_final_diagnosis([], {})
+    assert "Fehler bei Verarbeitung" in str(exc.value)

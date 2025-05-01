@@ -1,7 +1,6 @@
-# tests/test_mentor_agent.py
-import os
 import pytest
-from src.agents.mentor_agent import run_mentor_agent
+import src.agents.mentor_agent as mentor_mod
+from src.agents.mentor_agent import init_openai_client, run_mentor_agent, MentorResponse
 
 class DummyClient:
     def __init__(self, content):
@@ -9,28 +8,32 @@ class DummyClient:
         self.chat = self
         self.completions = self
 
-    def create(self, model, messages, **kwargs):
+    def create(self, *args, **kwargs):
         return type("Resp", (), {
             "choices": [type("Choice", (), {
-                "message": type("Message", (), {
-                    "content": self._content
-                })
+                "message": type("Msg", (), {"content": self._content})
             })]
         })
 
 @pytest.fixture(autouse=True)
 def fix_api_key(monkeypatch):
-    monkeypatch.setenv("OPENAI_APIKEY", "test")
+    monkeypatch.setenv("OPENAI_APIKEY", "testkey")
     yield
     monkeypatch.delenv("OPENAI_APIKEY", raising=False)
 
-def test_mentor_agent(monkeypatch):
-    dummy_text = "Hier die Erklärung"
+def test_init_openai_client_no_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_APIKEY", raising=False)
+    with pytest.raises(RuntimeError):
+        init_openai_client()
+
+def test_run_mentor_agent(monkeypatch):
+    explanation = "Hier die Erklärung"
+    # Stub init_openai_client
     monkeypatch.setattr(
         "src.agents.mentor_agent.init_openai_client",
-        lambda: DummyClient(dummy_text)
+        lambda: DummyClient(explanation)
     )
-    # history kann leer sein, coach_resp beliebiges Dict
-    res = run_mentor_agent([], {"diagnosis": {"foo": "bar"}})
-    assert "explanation" in res
-    assert res["explanation"] == dummy_text
+    # Führe Mentor-Agent aus
+    out = run_mentor_agent([], {"diagnosis": {"foo": "bar"}})
+    assert isinstance(out, dict)
+    assert out["explanation"] == explanation
