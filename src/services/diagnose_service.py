@@ -5,7 +5,7 @@ import openai
 from pydantic import BaseModel, Field, ValidationError
 
 # Umgebungsvariable für OpenAI-Key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("OPENAI_APIKEY")
 
 class FinalDiagnosisResponse(BaseModel):
     """

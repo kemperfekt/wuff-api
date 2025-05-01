@@ -2,14 +2,14 @@
 
 import os
 import json
-from typing import List, Dict
-
+from typing import List, Dict, Any
 from openai import OpenAI
 from pydantic import ValidationError
 
-from src.models.symptom_models import SymptomInfo  
+from src.models.symptom_models import SymptomInfo
 from src.models.instinct_models import InstinctClassification
-from src.services.retrieval import get_symptom_info, get_breed_info
+from src.services.retrieval import get_symptom_info
+from src.services.diagnose_service import get_final_diagnosis, FinalDiagnosisResponse
 
 from src.prompts.prompt_hundliche_wahrnehmung import hundliche_wahrnehmung
 from src.prompts.system_prompt_diagnose import diagnose_instinktklassifikation
@@ -17,9 +17,9 @@ from src.prompts.system_prompt_questions import diagnose_rueckfragen
 
 
 def init_openai_client() -> OpenAI:
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_APIKEY")
+    api_key = os.getenv("OPENAI_APIKEY")
     if not api_key:
-        raise RuntimeError("OpenAI API-Key nicht gesetzt")
+        raise RuntimeError("OpenAI APIKEY nicht gesetzt")
     return OpenAI(api_key=api_key)
 
 
@@ -50,7 +50,7 @@ def classify_instincts(text: str, client: OpenAI) -> InstinctClassification:
     system_prompt = hundliche_wahrnehmung + "\n\n" + diagnose_instinktklassifikation
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": text}
@@ -69,54 +69,61 @@ def classify_instincts(text: str, client: OpenAI) -> InstinctClassification:
         raise RuntimeError(f"InstinctClassification-Parsing fehlgeschlagen: {e}")
 
 
-def run_diagnose_agent(symptom_input: str) -> List[str]:
-    client = init_openai_client()
-    classification = classify_instincts(symptom_input, client)
+def run_diagnose_agent(session_id: str, user_input: str) -> Dict[str, Any]:
+    """
+    Fortsetzen des Diagnose-Flows:
+    - Lädt intern den Session-State via session_id
+    - Führt Instinkt-Klassifikation, Rückfragen oder finale Diagnose aus
+    - Speichert den Session-State
+    """
+    from src.services.state import load_state, save_state
 
-    known_facts: List[SymptomInfo] = []
+    # 1. Session-State laden
+    state = load_state(session_id)
+    state.add_message("user", user_input)
+
+    client = init_openai_client()
+
+    # 2. Instinkt-Klassifikation
+    classification = classify_instincts(user_input, client)
+
+    # 3. Fakten sammeln
+    facts: List[SymptomInfo] = []
     for instinct in classification.known_instincts:
         try:
             info = get_symptom_info(instinct)
-            known_facts.append(info)
+            facts.append(info)
+            state.add_message("assistant", f"Fakt geladen: {instinct}")
         except Exception:
             continue
 
-    uncertain = classification.uncertain_instincts
-    if not uncertain:
-        return [generate_final_diagnosis(known_facts, [])]
-
-    question_prompt = hundliche_wahrnehmung + "\n\n" + diagnose_rueckfragen
-
-    messages = [
-        {"role": "system", "content": question_prompt},
-        {"role": "user", "content": json.dumps({
-            "uncertain_instincts": uncertain,
-            "symptom_input": symptom_input
-        })}
-    ]
-
-    q_resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages
-    )
-    return [q_resp.choices[0].message.content.strip()]
-
-
-def generate_final_diagnosis(known_facts: List[SymptomInfo], answers: List[str]) -> str:
-    client = init_openai_client()
-    system_prompt = hundliche_wahrnehmung + "\n\n" + (
-        "Du bist ein diagnostischer Agent für Hundeverhalten. "
-        "Basierend auf den folgenden Fakten und Antworten nenne den primären Hundinstinkt "
-        "(oder mehrere, falls zutreffend):\n\n"
-    )
-
-    content = system_prompt
-    for fact in known_facts:
-        content += f"- {fact.symptom_name}: {fact.instinktvarianten}\n"
-    content += "\nUser-Antworten:\n" + "\n".join(f"- {a}" for a in answers)
-
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": content}]
-    )
-    return resp.choices[0].message.content.strip()
+    # 4. Rückfragen oder finale Diagnose
+    if classification.uncertain_instincts:
+        question_prompt = hundliche_wahrnehmung + "\n\n" + diagnose_rueckfragen
+        messages = [
+            {"role": "system", "content": question_prompt},
+            {"role": "user", "content": json.dumps({
+                "uncertain_instincts": classification.uncertain_instincts,
+                "symptom_input": user_input
+            })}
+        ]
+        q_resp = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=messages
+        )
+        next_q = q_resp.choices[0].message.content.strip()
+        state.add_message("assistant", next_q)
+        save_state(session_id, state)
+        return {"question": next_q}
+    else:
+        # Finalen Diagnose-Service aufrufen
+        try:
+            final: FinalDiagnosisResponse = get_final_diagnosis(
+                session_log=state.history,
+                known_facts={"symptoms": [f.dict() for f in facts]}
+            )
+        except RuntimeError as e:
+            raise RuntimeError(f"Fehler bei finaler Diagnose: {e}")
+        state.add_message("assistant", final.message)
+        save_state(session_id, state)
+        return final.dict()

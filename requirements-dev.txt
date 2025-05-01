@@ -1,0 +1,4 @@
+# requirements-dev.txt
+pytest
+pytest-cov
+pact-python>=1.0.0
