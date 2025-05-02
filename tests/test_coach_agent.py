@@ -25,7 +25,7 @@ def stub_retrieval_and_key(monkeypatch):
         "get_symptom_info",
         lambda s: type("S", (), {
             "beschreibung": "Desc",
-            "instinkt_varianten": {"i": "V"},
+            "instinktvarianten": {"i": "V"},
             "dict": lambda self: {}
         })()
     )

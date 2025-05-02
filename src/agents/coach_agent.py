@@ -1,5 +1,3 @@
-# src/agents/coach_agent.py
-
 import os
 import json
 from typing import Any, Dict, List
@@ -43,32 +41,34 @@ def run_coach_agent(
 ) -> Dict[str, Any]:
     client = init_openai_client()
 
-    # --- 1) RAG-Fakten holen (stubs in Tests überlagern diese Aufrufe) ---
+    # 1) Fakten aus Weaviate ziehen
     symptom = get_symptom_info(symptom_input)
+    # → symptom.instinktvarianten ist Dict[str,str]
+    first_instinct: str = next(iter(symptom.instinktvarianten.keys()), None)  # nur der String-Name
     if user_breed:
         breed = get_breed_info(user_breed)
         instinct_profile = get_instinkt_profile(breed.gruppen_code)
+    elif first_instinct:
+        instinct_profile = get_instinkt_profile(first_instinct)
     else:
-        # sicherer Zugriff auf ersten Instinkt-Namen
-        first_instinct = next(iter(symptom.instinkt_varianten), None)
-        instinct_profile = get_instinkt_profile(first_instinct) if first_instinct else None
+        instinct_profile = None
 
-    # --- 2) Prompt-Kontext bauen ---
-    ctx_lines = [
+    # 2) Prompt-Kontext aufbauen
+    context = [
         f"**Hund erklärt:** {dog_explanation}",
-        f"**Symptombeschreibung:** {symptom.beschreibung}",
+        f"**Symptombeschreibung:** {symptom.beschreibung[:200]}…",
         "**Instinktvarianten:**"
     ]
-    for inst, txt in symptom.instinkt_varianten.items():
-        ctx_lines.append(f"- {inst}: {txt}")
+    for inst_name, text in symptom.instinktvarianten.items():
+        context.append(f"- {inst_name}: {text[:100]}…")
     if instinct_profile:
-        ctx_lines.append(f"**Instinktprofil ({instinct_profile.gruppe}):** {instinct_profile.merkmale}")
+        context.append(f"**Instinktprofil ({instinct_profile.gruppe}):** {instinct_profile.merkmale[:200]}…")
     if user_breed and breed:
-        ctx_lines.append(f"**Rasse ({breed.rassename}):** {breed.ursprungsland}")
+        context.append(f"**Rasse ({breed.rassename}):** {breed.ursprungsland}")
 
-    full_prompt = coach_prompt.replace("{{context}}", "\n".join(ctx_lines))
+    full_prompt = coach_prompt.replace("{{context}}", "\n".join(context))
 
-    # --- 3) LLM-Call für Rückfragen oder Diagnose ---
+    # 3) LLM-Aufruf
     messages = [
         {"role": "system",  "content": full_prompt},
         {"role": "assistant_dog", "content": dog_explanation},
@@ -80,21 +80,25 @@ def run_coach_agent(
     )
     text = resp.choices[0].message.content.strip()
 
-    # --- 4) JSON parsen & Response bauen ---
+    # 4) JSON parsen
     try:
         payload = json.loads(text)
     except json.JSONDecodeError:
         raise RuntimeError(f"Coach-Agent: Ungültige JSON-Antwort: {text}")
 
+    # 5) Rückfragen- vs. Diagnose-Zweig
     if "questions" in payload:
-        return CoachQuestionResponse(question=payload["questions"][0]).model_dump()
+        return CoachQuestionResponse(question=payload["questions"][0]).dict()
     else:
         final: FinalDiagnosisResponse = get_final_diagnosis(
             session_log=history + [{"role": "assistant_dog", "content": dog_explanation}],
-            known_facts={"symptom": symptom.dict(), "instinktprofil": instinct_profile.dict() if instinct_profile else {}}
+            known_facts={
+                "symptom": symptom.dict(),
+                "instinktprofil": instinct_profile.dict() if instinct_profile else {}
+            }
         )
         return CoachDiagnosisResponse(
             message=final.message,
             details=final.details,
             needs_background=final.needs_background
-        ).model_dump()
+        ).dict()

@@ -48,7 +48,7 @@ def stub_state_and_retrieval(monkeypatch):
             symptom_name="X",
             beschreibung="Desc",
             erste_hilfe="EH",
-            instinkt_varianten={"jagd": "J"}
+            instinktvarianten={"jagd": "J"}
         )
     )
     monkeypatch.setattr(
