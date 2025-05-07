@@ -1,61 +1,23 @@
-# src/main.py
+# main.py
 
-import os
-import uuid
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
+from orchestrator.flow_orchestrator import handle_symptom
+from state.session_state import SessionState
 
-from src.agents.flow_agent import run_full_flow
+# Beispiel-Sitzung
+state = SessionState()
 
-# Legacy-Alias für Tests – die Handler nutzen jetzt run_diagnose_agent
-run_diagnose_agent = run_full_flow
+# Beispiel: Mensch beschreibt ein Symptom
+symptom_input = "zieht an der Leine"
+instinktvarianten = {
+    "jagd": ["Fixiert dein Hund etwas in der Ferne?", "Zieht er los, wenn er eine Spur wittert?"],
+    "rudel": ["Ist er besonders unruhig, wenn ihr getrennt seid?", "Läuft er gezielt zu bestimmten Menschen hin?"],
+    "territorial": ["Reagiert er an bestimmten Orten besonders stark?", "Wirkt er wie ein 'Wächter'?"],
+    "sexual": ["Ist er dabei angespannt gegenüber Hündinnen oder Rüden?", "Markiert er auffällig oft?"]
+}
 
-app = FastAPI()
+# FSM starten
+messages = handle_symptom(symptom_input, instinktvarianten, state)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-class DiagnoseStartRequest(BaseModel):
-    symptom_input: str
-
-class DiagnoseStartResponse(BaseModel):
-    session_id: str
-    question: str | None = None
-    message: str | None = None
-    details: dict | None = None
-
-@app.post("/diagnose_start", response_model=DiagnoseStartResponse)
-def diagnose_start(req: DiagnoseStartRequest):
-    sid = str(uuid.uuid4())
-    # Nutze Alias
-    result = run_diagnose_agent(sid, req.symptom_input)
-    return {"session_id": sid, **result}
-
-class DiagnoseRequest(BaseModel):
-    session_id: str
-    user_input: str
-
-class DiagnoseResponse(BaseModel):
-    question: str | None = None
-    message: str | None = None
-    details: dict | None = None
-
-@app.post("/diagnose_continue", response_model=DiagnoseResponse)
-def diagnose_continue(req: DiagnoseRequest):
-    try:
-        # Verwende Alias, nicht direkt run_full_flow
-        result = run_diagnose_agent(req.session_id, req.user_input)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    import uvicorn
-    uvicorn.run("src.main:app", host="0.0.0.0", port=port, reload=True)
+# Ausgabe
+for msg in messages:
+    print(f"[{msg.role}] {msg.content}")
