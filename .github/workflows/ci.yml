@@ -1,8 +1,8 @@
 on:
   push:
-    branches: ["refactor/fsm-orchestrator"]
+    branches: ["refactor/clean-fsm-agents"]
   pull_request:
-    branches: ["refactor/fsm-orchestrator"]
+    branches: ["refactor/clean-fsm-agents"]
 
 jobs:
   test:
