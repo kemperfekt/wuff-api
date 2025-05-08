@@ -1,10 +1,12 @@
+# .github/workflows/ci.yml
+
 name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, refactor-clean-fsm-agents ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, refactor-clean-fsm-agents ]
 
 jobs:
   test:
