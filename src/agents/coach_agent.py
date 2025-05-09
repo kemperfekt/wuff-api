@@ -1,11 +1,9 @@
-
-
 from typing import List
-from models.flow_models import AgentMessage
-from services.retrieval import ask_with_context
-from services.gpt_service import ask_gpt
-from agents.base_agent import BaseAgent
-from services.weaviate_service import get_client
+from src.models.flow_models import AgentMessage
+from src.services.retrieval import ask_with_context
+from src.services.gpt_service import ask_gpt
+from src.agents.base_agent import BaseAgent
+from src.services.weaviate_service import get_client
 
 
 class CoachAgent(BaseAgent):
@@ -20,8 +18,17 @@ class CoachAgent(BaseAgent):
         """
         Wählt je Instinkt eine gezielte Rückfrage aus den vorhandenen Varianten (via RAG).
         """
+        from weaviate.classes.query import MetadataQuery
+
         client = get_client()
-        symptom = client.collections.get("Symptom").query.fetch_object_by_id(symptom_name)
+        symptom_collection = client.collections.get("Symptom")
+        response = symptom_collection.query.near_text(
+            query=symptom_name,
+            limit=1,
+            return_metadata=MetadataQuery(distance=True)
+        )
+
+        symptom = response.objects[0] if response.objects else None
         if not symptom:
             return [AgentMessage(role=self.role, content="Ich konnte leider keine Informationen zum Symptom finden.")]
 

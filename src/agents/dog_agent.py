@@ -1,6 +1,6 @@
 from typing import List
-from models.flow_models import AgentMessage
-from agents.base_agent import BaseAgent
+from src.models.flow_models import AgentMessage
+from src.agents.base_agent import BaseAgent
 
 
 class DogAgent(BaseAgent):

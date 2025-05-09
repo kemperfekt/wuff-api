@@ -1,6 +1,6 @@
 import os
 import weaviate
-from weaviate.connect import Auth
+from weaviate.classes.init import Auth
 
 
 # -----------------------------------------------
@@ -41,6 +41,8 @@ def search_relevant_chunks(query: str, class_name: str = "Symptom", limit: int =
         limit=limit,
         return_metadata=MetadataQuery(distance=True),
     )
+
+    client.close()
 
     # ⚠️ HINWEIS: Aktuell wird nur das Feld 'text' verwendet.
     # Wenn du eine andere Property (z. B. 'beschreibung' oder 'antwort') nutzt,

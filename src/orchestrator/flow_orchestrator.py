@@ -1,10 +1,10 @@
 # src/orchestrator/flow_orchestrator.py
 
 from typing import List
-from models.flow_models import AgentMessage
-from agents.coach_agent import CoachAgent
-from agents.dog_agent import DogAgent
-from state.session_state import SessionState, SymptomState, AgentStatus
+from src.models.flow_models import AgentMessage
+from src.agents.coach_agent import CoachAgent
+from src.agents.dog_agent import DogAgent
+from src.state.session_state import SessionState, SymptomState, AgentStatus
 
 
 dog_agent = DogAgent()

@@ -1,15 +1,14 @@
 # main.py
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from orchestrator.flow_orchestrator import handle_symptom
-from state.session_state import SessionStore
-from state.session_state import SessionState
+from src.orchestrator.flow_orchestrator import handle_symptom
+from src.state.session_state import SessionStore
 
 app = FastAPI()
 
-# CORS, damit das Frontend zugreifen kann
+# CORS-Block für Frontend-Zugriff
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # später ggf. Frontend-Domain einschränken
@@ -46,8 +45,8 @@ class ContinueRequest(BaseModel):
 async def flow_intro():
     session = session_store.create_session()
     messages = [{
-        "role": "system",
-        "content": "Hallo! Was möchtest du über deinen Hund herausfinden?"
+        "sender": "dog",
+        "text": "Hallo! Was möchtest du über deinen Hund herausfinden?"
     }]
     return {"session_id": session.session_id, "messages": messages}
 
@@ -56,7 +55,7 @@ async def flow_intro():
 async def flow_start(req: StartRequest):
     session = session_store.get_or_create(req.session_id)
     result = handle_symptom(req.symptom, DUMMY_INSTINKTVARIANTEN, session)
-    return {"session_id": session.session_id, "messages": [msg.dict() for msg in result], "done": False}
+    return {"session_id": session.session_id, "messages": [msg.model_dump() for msg in result], "done": False}
 
 
 @app.post("/flow_continue")

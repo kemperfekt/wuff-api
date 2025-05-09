@@ -1,9 +1,9 @@
 # src/agents/base_agent.py
 
 from typing import Optional, List
-from models.flow_models import AgentMessage
-from services.retrieval import ask_with_context
-from services.gpt_service import ask_gpt
+from src.models.flow_models import AgentMessage
+from src.services.retrieval import ask_with_context
+from src.services.gpt_service import ask_gpt
 
 
 class BaseAgent:

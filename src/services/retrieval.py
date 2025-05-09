@@ -2,8 +2,8 @@
 
 # src/services/retrieval.py
 
-from services.gpt_service import ask_gpt
-from services.weaviate_service import search_relevant_chunks
+from src.services.gpt_service import ask_gpt
+from src.services.weaviate_service import search_relevant_chunks
 
 
 def build_prompt_with_context(query: str, context_chunks: list[str]) -> str:
