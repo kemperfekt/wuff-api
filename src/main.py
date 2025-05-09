@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.orchestrator.flow_orchestrator import handle_symptom
 from src.state.session_state import SessionStore
+from src.agents.dog_agent import DogAgent
 
 app = FastAPI()
 
@@ -41,12 +42,14 @@ class ContinueRequest(BaseModel):
     answer: str
 
 
+dog = DogAgent()
+
 @app.post("/flow_intro")
 async def flow_intro():
     session = session_store.create_session()
     messages = [{
-        "sender": "dog",
-        "text": "Hallo! Was möchtest du über deinen Hund herausfinden?"
+        "sender": dog.role,
+        "text": dog.greeting_text
     }]
     return {"session_id": session.session_id, "messages": messages}
 
