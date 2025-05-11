@@ -16,7 +16,7 @@ class DogAgent(BaseAgent):
         Reagiert instinktgeprägt und emotional auf das geschilderte Verhalten aus Hundesicht.
         Diese Version verwendet GPT, perspektivisch ergänzt durch Inhalte aus der 'Hundeperspektive'-Collection (RAG).
         """
-        from services.gpt_service import ask_gpt
+        from src.services.gpt_service import ask_gpt
 
         prompt = (
             "Stell dir vor, du bist ein Hund und erlebst folgende Situation:\n"
@@ -27,3 +27,6 @@ class DogAgent(BaseAgent):
 
         antwort = ask_gpt(prompt)
         return [AgentMessage(role=self.role, content=antwort)]
+
+    def respond(self, user_input: str, **kwargs) -> List[AgentMessage]:
+        return self.react_to_symptom(user_input)

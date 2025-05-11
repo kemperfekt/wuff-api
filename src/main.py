@@ -58,7 +58,11 @@ async def flow_intro():
 async def flow_start(req: StartRequest):
     session = session_store.get_or_create(req.session_id)
     result = handle_symptom(req.symptom, DUMMY_INSTINKTVARIANTEN, session)
-    return {"session_id": session.session_id, "messages": [msg.model_dump() for msg in result], "done": False}
+    return {
+        "session_id": session.session_id,
+        "messages": [{"sender": msg.role, "text": msg.content} for msg in result],
+        "done": False
+    }
 
 
 @app.post("/flow_continue")
@@ -68,8 +72,8 @@ async def flow_continue(req: ContinueRequest):
     return {
         "session_id": session.session_id,
         "messages": [{
-            "role": "system",
-            "content": f"Danke für deine Antwort: '{req.answer}'. Mehr Logik folgt bald!"
+            "sender": "system",
+            "text": f"Danke für deine Antwort: '{req.answer}'. Mehr Logik folgt bald!"
         }],
         "done": True
     }
