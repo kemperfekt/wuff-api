@@ -2,26 +2,23 @@
 
 from typing import List
 from src.models.flow_models import AgentMessage
-from src.agents.coach_agent import CoachAgent
 from src.agents.dog_agent import DogAgent
 from src.state.session_state import SessionState, SymptomState, AgentStatus
 
 
 dog_agent = DogAgent()
-coach_agent = CoachAgent()
 
 
 def handle_symptom(symptom_input: str, instinktvarianten: dict, state: SessionState) -> List[AgentMessage]:
     """
     Führt einen einfachen Dialogfluss aus, verwendet explizit übergebenen SessionState:
     1. Hund reagiert emotional auf das Symptom
-    2. Coach stellt Rückfragen zu Instinkten
     """
 
     messages: List[AgentMessage] = []
 
     # Initialisiere Agentenzustände bei Bedarf
-    for agent in [dog_agent.role, coach_agent.role]:
+    for agent in [dog_agent.role]:
         if agent not in state.agent_status:
             state.agent_status[agent] = AgentStatus()
 
@@ -37,15 +34,5 @@ def handle_symptom(symptom_input: str, instinktvarianten: dict, state: SessionSt
             is_first_message=True
         )
         state.agent_status[dog_agent.role].is_first_message = False
-
-    # 2. Coach stellt Rückfragen
-    if state.agent_status[coach_agent.role].is_first_message:
-        messages += [AgentMessage(role=coach_agent.role, content=coach_agent.greeting_text)]
-        state.agent_status[coach_agent.role].is_first_message = False
-
-    messages += coach_agent.generate_rueckfragen(
-        symptom_name=symptom_input,
-        instinktvarianten=instinktvarianten,
-    )
 
     return messages

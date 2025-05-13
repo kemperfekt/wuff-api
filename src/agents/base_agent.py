@@ -2,7 +2,6 @@
 
 from typing import Optional, List
 from src.models.flow_models import AgentMessage
-from src.services.retrieval import ask_with_context
 from src.services.gpt_service import ask_gpt
 
 

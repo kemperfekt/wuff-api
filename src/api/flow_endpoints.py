@@ -64,9 +64,18 @@ def flow_continue(request: FlowContinueRequest):
     if not state:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Antwort an CoachAgent weitergeben – aktuell noch nicht implementiert
-    messages = [
-        AgentMessage(role="coach", content="Danke! Ich habe deine Antwort notiert. 🧠 Mehr Fragen folgen bald.")
-    ]
+    print(f"📨 Eingegangene Antwort von Mensch: {request.answer}")
+    print(f"📨 Session-ID: {request.session_id}")
 
-    return FlowResponse(session_id=request.session_id, messages=messages, done=False)
+    try:
+        agent = DogAgent()
+        messages = agent.continue_flow(request.answer)
+
+        print("✅ GPT hat folgende Nachrichten zurückgegeben:")
+        for m in messages:
+            print(f"- {m.sender}: {m.text}")
+
+        return FlowResponse(session_id=request.session_id, messages=messages, done=False)
+    except Exception as e:
+        print("❌ Fehler beim Verarbeiten der Folgeantwort:", e)
+        raise HTTPException(status_code=500, detail=str(e))

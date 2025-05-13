@@ -3,7 +3,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from src.orchestrator.flow_orchestrator import handle_symptom
 from src.state.session_state import SessionStore
 from src.agents.dog_agent import DogAgent
 
@@ -57,19 +56,16 @@ async def flow_intro():
 @app.post("/flow_start")
 async def flow_start(req: StartRequest):
     session = session_store.get_or_create(req.session_id)
-    result = handle_symptom(req.symptom, DUMMY_INSTINKTVARIANTEN, session)
+    result = dog.react_to_symptom(req.symptom)
     return {"session_id": session.session_id, "messages": [msg.model_dump() for msg in result], "done": False}
 
 
 @app.post("/flow_continue")
 async def flow_continue(req: ContinueRequest):
-    # MVP: einfach Antwort anhängen – später mit echter FSM-Weiterverarbeitung
     session = session_store.get_or_create(req.session_id)
+    messages = dog.continue_flow(req.answer)
     return {
         "session_id": session.session_id,
-        "messages": [{
-            "role": "system",
-            "content": f"Danke für deine Antwort: '{req.answer}'. Mehr Logik folgt bald!"
-        }],
-        "done": True
+        "messages": [msg.model_dump() for msg in messages],
+        "done": False
     }
