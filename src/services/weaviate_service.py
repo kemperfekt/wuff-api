@@ -42,9 +42,15 @@ def search_relevant_chunks(query: str, class_name: str = "Symptom", limit: int =
         return_metadata=MetadataQuery(distance=True),
     )
 
+    print(f"🔎 Weaviate Query: '{query}' in Klasse '{class_name}'")
+    print(f"📦 Treffer: {[obj.properties for obj in response.objects]}")
+
     client.close()
 
     # ⚠️ HINWEIS: Aktuell wird nur das Feld 'text' verwendet.
     # Wenn du eine andere Property (z. B. 'beschreibung' oder 'antwort') nutzt,
     # muss diese hier angepasst werden!
-    return [obj.properties.get("text", "") for obj in response.objects]
+    return [
+        f"{obj.properties.get('thema', '')}: {obj.properties.get('beschreibung', '')}"
+        for obj in response.objects
+    ]

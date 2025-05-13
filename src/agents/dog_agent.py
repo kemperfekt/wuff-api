@@ -1,4 +1,5 @@
 from typing import List
+import json
 from src.models.flow_models import AgentMessage
 from src.agents.base_agent import BaseAgent
 from src.services.gpt_service import ask_gpt
@@ -19,45 +20,44 @@ class DogAgent(BaseAgent):
         Nutzt GPT + Weaviate (RAG) + ggf. Rückfrage zur Klärung.
         Rückgabe: emotionale Antwort + gezielte Nachfrage als 2 getrennte AgentMessages.
         """
+        self.latest_symptom = symptom_description
 
-        # 1. Symptomkontext aus Weaviate holen
-        symptom_info = get_symptom_info(symptom_description)
+        from src.services.retrieval import get_hundeperspektive
 
-        # 2. Prompt vorbereiten
+        perspektive_raw = get_hundeperspektive(symptom_description)
+
+        retrieved_chunks = perspektive_raw.strip()
+        if not retrieved_chunks:
+            fallback = (
+                "Vielen Dank für die Beschreibung. Leider kann ich zu dem Verhalten noch nichts sagen. "
+                'Bitte probiere es mal mit:\n\n"Wenn wir Gassi gehen, bellst Du fremde Menschen und Hunde an."'
+            )
+            return [AgentMessage(sender=self.role, text=fallback)]
+
         base_prompt = (
-            "Stell dir vor, du bist ein Hund und erlebst folgende Situation:\n"
-            f"'{symptom_description}'\n\n"
+            f"Ich bin ein Hund und habe dieses Verhalten gezeigt:\n'{symptom_description}'\n\n"
         )
 
-        # a) Falls relevante Inhalte in RAG
-        if symptom_info:
-            base_prompt += (
-                "Diese Informationen helfen dir beim Einordnen:\n"
-                f"{symptom_info}\n\n"
-            )
-
-        # b) Hauptfrage
         base_prompt += (
-            "Wie fühlt sich das aus Hundesicht an? Antworte emotional und instinktgeprägt – "
-            "nicht analytisch. Du darfst auf Geräusche, Gerüche oder Körpersprache eingehen. "
-            "Wenn du dein Verhalten noch nicht verstehst, stelle eine Rückfrage, um dir selbst auf die Spur zu kommen. "
-            "Sprich nur über dein eigenes Verhalten – nicht über das Verhalten des Menschen. "
-            "Trenne deine Erlebnisbeschreibung und die Rückfrage strikt mit drei Bindestrichen auf einer eigenen Zeile: ---"
+            "Hier sind Erlebnisse von Hunden in ähnlichen Situationen:\n"
+            f"{retrieved_chunks}\n\n"
+            "Du bist ein Hund. Beschreibe in einfacher Sprache, wie du dieses Verhalten aus deiner Perspektive wahrnimmst – geleitet von deinen Instinkten. "
+            "Vermeide Fachbegriffe, bleibe bei deinem Erleben als Hund. Nenne keine Instinkte beim Namen und sprich nicht über den Menschen. "
+            "Formuliere ruhig und klar. Nutze nur das, was oben steht. Keine Fantasie.\n"
+            "Beende deine Beschreibung mit einem Punkt, aber ohne weitere Fragen oder Kommentare."
         )
 
         # 3. GPT fragen
         antwort = ask_gpt(base_prompt)
 
-        # 4. Optional: Trennen von Aussage + Rückfrage
-        # GPT soll die Rückfrage mit einem Trennzeichen markieren: "---"
-        if "---" in antwort:
-            hauptteil, rückfrage = antwort.split("---", 1)
-            return [
-                AgentMessage(sender=self.role, text=hauptteil.strip()),
-                AgentMessage(sender=self.role, text=rückfrage.strip()),
-            ]
-        else:
-            return [AgentMessage(sender=self.role, text=antwort.strip())]
+        if not antwort:
+            return [AgentMessage(sender=self.role, text="Da fällt mir gerade nichts ein...")]
+
+        # 4. Rückgabe: Erlebnisbeschreibung + Diagnose-Angebot
+        return [
+            AgentMessage(sender=self.role, text=antwort.strip()),
+            AgentMessage(sender=self.role, text="Willst du wissen, warum ich mich so verhalte?"),
+        ]
 
     def continue_flow(self, answer: str) -> List[AgentMessage]:
         """
@@ -65,7 +65,14 @@ class DogAgent(BaseAgent):
         aus welchem Instinkt das Verhalten stammt. Falls unklar, Rückfrage stellen.
         """
         symptom = self.latest_symptom
-        symptom_info = get_symptom_info(symptom)
+        symptom_info_raw = get_symptom_info(symptom)
+        print("🧪 Weaviate-Rohantwort:\n", symptom_info_raw)
+
+        if not symptom_info_raw or not symptom_info_raw.strip().startswith("{"):
+            print("❌ Ungültige Weaviate-Rückgabe.")
+            return [AgentMessage(sender=self.role, text="Ich konnte dazu nichts in meiner Erinnerung finden...")]
+
+        symptom_info = json.loads(symptom_info_raw)
 
         if not symptom_info or not symptom_info.get("instinkt_varianten"):
             print("❌ Keine instinkt_varianten gefunden.")
@@ -88,15 +95,16 @@ class DogAgent(BaseAgent):
             "„Ich glaube, es ist mein Jagdinstinkt.“\n\n"
             "Wenn du noch unsicher bist, stelle eine Rückfrage – an dich selbst – um deinen eigenen Impuls besser zu verstehen.\n"
             "Sprich niemals über den Menschen. Bleibe in deiner Wahrnehmung.\n\n"
-            "Trenne Diagnose und Rückfrage strikt mit '---'."
+            "Formuliere nur eine Aussage: entweder eine Diagnose ODER eine Rückfrage. Gib nur einen Satz zurück."
         )
 
         antwort = ask_gpt(prompt).strip()
+
+        if not antwort:
+            return [AgentMessage(sender=self.role, text="Da kam nichts zurück, ich bin verwirrt...")]
+
         print("📥 GPT-Antwort:\n", antwort)
 
-        teile = [t.strip() for t in antwort.split("---") if t.strip()]
-        messages = [AgentMessage(sender=self.role, text=teil) for teil in teile if teil]
-        print("🐾 DogAgent antwortet mit folgenden Messages:")
-        for m in messages:
-            print(f"- {m.sender}: {m.text}")
-        return messages
+        print("🐾 DogAgent antwortet:")
+        print(f"- {self.role}: {antwort}")
+        return [AgentMessage(sender=self.role, text=antwort)]
