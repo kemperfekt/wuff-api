@@ -4,6 +4,7 @@ from typing import List
 from src.models.flow_models import AgentMessage
 from src.agents.dog_agent import DogAgent
 from src.state.session_state import SessionState, SymptomState, AgentStatus
+from src.services.message_utils import safe_message
 
 
 dog_agent = DogAgent()
