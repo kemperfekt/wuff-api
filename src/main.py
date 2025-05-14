@@ -56,14 +56,14 @@ async def flow_intro():
 @app.post("/flow_start")
 async def flow_start(req: StartRequest):
     session = session_store.get_or_create(req.session_id)
-    result = dog.react_to_symptom(req.symptom)
+    result = await dog.respond(req.symptom)
     return {"session_id": session.session_id, "messages": [msg.model_dump() for msg in result], "done": False}
 
 
 @app.post("/flow_continue")
 async def flow_continue(req: ContinueRequest):
     session = session_store.get_or_create(req.session_id)
-    messages = dog.continue_flow(req.answer)
+    messages = await dog.respond(req.answer)
     return {
         "session_id": session.session_id,
         "messages": [msg.model_dump() for msg in messages],

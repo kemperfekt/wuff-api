@@ -26,6 +26,8 @@ class SessionState(BaseModel):
     agent_status: Dict[str, AgentStatus] = Field(default_factory=dict)
     active_symptom: str = ""
     symptoms: Dict[str, SymptomState] = Field(default_factory=dict)
+    awaiting_diagnosis_confirmation: bool = False
+    diagnosis_confirmed: bool = False
 
 
 class SessionStore:
@@ -42,3 +44,7 @@ class SessionStore:
 
     def get_or_create(self, session_id: str) -> SessionState:
         return self.sessions.get(session_id) or self.create_session()
+
+
+# Globale Session-Verwaltung aktivieren (z. B. Zugriff über sessions["debug"])
+sessions = SessionStore()
