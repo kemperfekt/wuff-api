@@ -26,7 +26,7 @@ class DogAgent(BaseAgent):
         super().__init__(
             name="Hund",
             role="dog",
-            greeting_text="Wuff! Ich bin dein Hund. Ich erzähle dir, wie sich die Situation für mich angefühlt hat.",
+            greeting_text="Wuff! Ich bin dein Hund. Bitte nenne mir ein Verhalten und ich schildere Dir, wie ich es erlebe.",
         )
 
     def react_to_symptom(self, symptom_description: str) -> List[AgentMessage]:
@@ -45,7 +45,6 @@ class DogAgent(BaseAgent):
         if not retrieved_chunks:
             fallback = (
                 "Vielen Dank für die Beschreibung. Leider kann ich zu dem Verhalten noch nichts sagen. "
-                'Bitte probiere es mal mit:\n\n"Wenn wir Gassi gehen, bellst Du fremde Menschen und Hunde an."'
             )
             return [AgentMessage(sender=self.role, text=fallback)]
 
