@@ -9,7 +9,7 @@ def get_symptom_info(symptom_text: str) -> str:
     print("▶ get_symptom_info:", symptom_text)
     chunks = search_relevant_chunks(symptom_text, class_name="Symptom")
     print("🧠 Treffer (Symptom):", chunks)
-    return "\n".join(chunks)
+    return chunks[0] if chunks else ""
 
 def get_hundeperspektive(symptom_text: str) -> str:
     """

@@ -1,6 +1,7 @@
 import os
 import weaviate
 from weaviate.classes.init import Auth
+import json
 
 
 # -----------------------------------------------
@@ -50,7 +51,4 @@ def search_relevant_chunks(query: str, class_name: str = "Symptom", limit: int =
     # ⚠️ HINWEIS: Aktuell wird nur das Feld 'text' verwendet.
     # Wenn du eine andere Property (z. B. 'beschreibung' oder 'antwort') nutzt,
     # muss diese hier angepasst werden!
-    return [
-        f"{obj.properties.get('thema', '')}: {obj.properties.get('beschreibung', '')}"
-        for obj in response.objects
-    ]
+    return [json.dumps(obj.properties) for obj in response.objects]

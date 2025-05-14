@@ -5,6 +5,21 @@ from src.agents.base_agent import BaseAgent
 from src.services.gpt_service import ask_gpt
 from src.services.retrieval import get_symptom_info
 
+INSTINKT_FRAGEN = {
+    "jagd": [
+        "Kommt es vor, dass ich plötzlich stehenbleibe und etwas in der Ferne fixiere, oder ausgiebig auf dem Boden schnüffle?"
+    ],
+    "territorial": [
+        "Kommt das häufiger vor, wenn wir aus der Wohnung oder aus dem Haus gehen oder in der Nähe unseres Zuhause unterwegs sind?"
+    ],
+    "rudel": [
+        "Stelle ich mich in solchen Situationen quer vor Dich oder schneide ich Dir beim Laufen den Weg ab?"
+    ],
+    "sexual": [
+        "Falls ich ein Rüde bin: Bin ich vielleicht einer Hündin begegnet? Falls ich eine Hündin bin: War ich in der Zeit läufig?"
+    ]
+}
+
 
 class DogAgent(BaseAgent):
     def __init__(self):
@@ -91,7 +106,7 @@ class DogAgent(BaseAgent):
             "Ich bin ein Hund und versuche herauszufinden, aus welchem Instinkt mein Verhalten stammt.\n\n"
             f"Hier sind vier mögliche Instinktvarianten für mein Verhalten:\n\n{variantentext}\n\n"
             "Dein Ziel: Entscheide, ob du aus diesen Varianten schon erkennst, welcher Instinkt bei dir eine Rolle spielt.\n"
-            "Wenn du dir sicher bist, gib eine Diagnose ab, z. B.:\n"
+            "Wenn du dir sicher bist, gib eine Diagnose ab, z.B.:\n"
             "„Ich glaube, es ist mein Jagdinstinkt.“\n\n"
             "Wenn du noch unsicher bist, stelle eine Rückfrage – an dich selbst – um deinen eigenen Impuls besser zu verstehen.\n"
             "Sprich niemals über den Menschen. Bleibe in deiner Wahrnehmung.\n\n"
@@ -107,4 +122,30 @@ class DogAgent(BaseAgent):
 
         print("🐾 DogAgent antwortet:")
         print(f"- {self.role}: {antwort}")
-        return [AgentMessage(sender=self.role, text=antwort)]
+
+        if "?" in antwort and "warum" not in antwort.lower():
+            # GPT hat eine Rückfrage gestellt – wir merken sie und geben sie direkt weiter
+            return [AgentMessage(sender=self.role, text=antwort)]
+
+        if "instinkt" in antwort.lower():
+            # GPT hat eine Diagnose geliefert
+            return [AgentMessage(sender=self.role, text=antwort)]
+
+        # Fallback: keine klare Diagnose, keine Rückfrage – Rückfragenlogik starten
+        instinct_order = ["jagd", "territorial", "rudel", "sexual"]
+        active = self.latest_symptom
+        from src.state.session_state import sessions  # temporär: Zugriff auf globales sessions-Dict
+        state = sessions.get("debug")  # für MVP statisch, später dynamisch per Übergabe
+        if not state:
+            return [AgentMessage(sender=self.role, text="Ich konnte meinen inneren Spürsinn nicht abrufen...")]
+
+        sym_state = state.symptoms.get(active)
+        if not sym_state:
+            return [AgentMessage(sender=self.role, text="Ich habe das Verhalten nicht wiedergefunden...")]
+
+        for instinkt in instinct_order:
+            if not sym_state.asked_instincts.get(instinkt):
+                sym_state.asked_instincts[instinkt] = True
+                return [AgentMessage(sender=self.role, text=f"Wenn du an mich denkst – trifft das hier manchmal zu: {instinkt.upper()}?")]
+
+        return [AgentMessage(sender=self.role, text="Ich konnte keinen passenden Instinkt finden. Wollen wir nochmal von vorn anfangen?")]
