@@ -35,7 +35,7 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             messages.append(AgentMessage(sender=dog_agent.role, text="Magst du mir genauer sagen, was passiert ist?"))
         else:
             state.active_symptom = user_input
-            messages.append(AgentMessage(sender=dog_agent.role, text="Ah, verstehe… Aus meiner Sicht fühlt sich das so an: [Dummy Hundeperspektive]. Willst du, dass ich versuche zu verstehen, warum ich das mache?"))
+            messages.append(AgentMessage(sender=dog_agent.role, text="Ah, verstehe… Aus meiner Sicht fühlt sich das so an: [Dummy Hundeperspektive]. Magst Du erfahren, warum ich mich so verhalte?"))
             state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
 
     elif step == FlowStep.WAIT_FOR_CONFIRMATION:
@@ -58,7 +58,7 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
     elif step == FlowStep.END_OR_RESTART:
         if "ja" in user_input:
             state.current_step = FlowStep.WAIT_FOR_SYMPTOM
-            messages.append(AgentMessage(sender=dog_agent.role, text="Okay, was möchtest du mir diesmal erzählen?"))
+            messages.append(AgentMessage(sender=dog_agent.role, text="Okay, was möchtest du mir erzählen?"))
         elif "nein" in user_input:
             messages.append(AgentMessage(sender=dog_agent.role, text="Alles klar. Magst du mir noch sagen, ob dir mein Wuff geholfen hat?"))
             state.current_step = FlowStep.FEEDBACK
@@ -67,7 +67,7 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
 
     elif step == FlowStep.FEEDBACK:
         state.feedback = user_input
-        messages.append(AgentMessage(sender=dog_agent.role, text="Danke für dein Feedback. Bis bald!"))
+        messages.append(AgentMessage(sender=dog_agent.role, text="Danke für dein Feedback. Wuff wuff!"))
 
     else:
         messages.append(AgentMessage(sender=dog_agent.role, text="Ich bin kurz verwirrt… lass uns neu starten."))
