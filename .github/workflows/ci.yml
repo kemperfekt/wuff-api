@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, refactor-clean-fsm-agents ]
+    branches: [ main, dog-agentic ]
   pull_request:
-    branches: [ main, refactor-clean-fsm-agents ]
+    branches: [ main, dog-agentic ]
 
 jobs:
   test:
