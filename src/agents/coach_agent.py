@@ -3,7 +3,6 @@ from src.models.flow_models import AgentMessage
 from src.services.retrieval import ask_with_context
 from src.services.gpt_service import ask_gpt
 from src.agents.base_agent import BaseAgent
-
 from src.services.weaviate_service import get_client
 
 
