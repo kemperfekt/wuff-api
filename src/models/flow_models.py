@@ -1,4 +1,18 @@
 # src/models/flow_models.py
+# src/models/flow_models.py
+
+from enum import Enum
+
+class FlowStep(str, Enum):
+    GREETING = "greeting"
+    WAIT_FOR_SYMPTOM = "wait_for_symptom"
+    SYMPTOM_ACK = "symptom_ack"
+    ASK_DIAGNOSE = "ask_diagnose"
+    WAIT_FOR_CONFIRMATION = "wait_for_confirmation"
+    ASK_CONTEXT = "ask_context"
+    WAIT_FOR_CONTEXT = "wait_for_context"
+    FINAL_DIAGNOSIS = "final_diagnosis"
+    END_OR_RESTART = "end_or_restart"
 
 from pydantic import BaseModel
 from typing import Dict

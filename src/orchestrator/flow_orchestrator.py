@@ -1,91 +1,65 @@
-from typing import List
-from src.models.flow_models import AgentMessage
-from src.agents.dog_agent import DogAgent
-from src.state.session_state import SessionState, SymptomState, AgentStatus
-from src.services.message_utils import safe_message
-from src.services.retrieval import get_instinktvarianten_for_symptom
-from src.services.gpt_service import diagnose_from_instinkte
+# src/orchestrator/flow_orchestrator.py
 
+from typing import List
+from src.models.flow_models import AgentMessage, FlowStep
+from src.state.session_state import SessionState
+from src.agents.dog_agent import DogAgent
 
 dog_agent = DogAgent()
 
 
-def handle_symptom(symptom_input: str, instinktvarianten: dict, state: SessionState) -> List[AgentMessage]:
-    # Rückfragen-Antwort speichern
-    if state.active_symptom in state.symptoms:
-        sym_state = state.symptoms[state.active_symptom]
-        # Wenn offene Rückfragen zu Instinkten existieren, speichere die Antwort als Menschensicht
-        for instinkt in ["jagd", "rudel", "territorial", "sexual"]:
-            if getattr(sym_state, "asked_instincts", {}).get(instinkt) and instinkt not in getattr(sym_state, "instinct_answers", {}):
-                if not hasattr(sym_state, "instinct_answers") or sym_state.instinct_answers is None:
-                    sym_state.instinct_answers = {}
-                sym_state.instinct_answers[instinkt] = symptom_input
-                return [AgentMessage(role=dog_agent.role, content="Danke. Ich überlege weiter...")]
-    """
-    Führt einen einfachen Dialogfluss aus, verwendet explizit übergebenen SessionState:
-    1. Hund reagiert emotional auf das Symptom
-    """
+def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
+    user_input = user_input.strip().lower()
 
+    # Restart bei bestimmten Eingaben
+    if user_input in ["neu", "restart", "von vorne"]:
+        state.current_step = FlowStep.GREETING
+        state.active_symptom = ""
+        return [AgentMessage(role=dog_agent.role, content="Okay, wir starten neu. Was möchtest du mir erzählen?")]
+
+    step = state.current_step
     messages: List[AgentMessage] = []
 
-    # Diagnoseentscheidung prüfen
-    if state.awaiting_diagnosis_confirmation:
-        if symptom_input.lower().strip() in ["ja", "ja.", "gern", "okay", "bitte"]:
-            state.diagnosis_confirmed = True
-            state.awaiting_diagnosis_confirmation = False
-            return [AgentMessage(role=dog_agent.role, content="Okay, dann schauen wir mal genauer hin...")]
+    if step == FlowStep.GREETING:
+        messages.append(AgentMessage(role=dog_agent.role, content="Hallo! Ich bin dein Hund. Was ist los?"))
+        state.current_step = FlowStep.WAIT_FOR_SYMPTOM
+
+    elif step == FlowStep.WAIT_FOR_SYMPTOM:
+        if len(user_input) < 5:
+            messages.append(AgentMessage(role=dog_agent.role, content="Magst du mir genauer sagen, was passiert ist?"))
         else:
-            state.awaiting_diagnosis_confirmation = False
-            return [AgentMessage(role=dog_agent.role, content="Alles klar, sag Bescheid, wenn du mehr wissen willst.")]
+            state.active_symptom = user_input
+            messages.append(AgentMessage(role=dog_agent.role, content="Ah, verstehe… Aus meiner Sicht fühlt sich das so an: [Dummy Hundeperspektive]. Willst du, dass ich versuche zu verstehen, warum ich das mache?"))
+            state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
 
-    # Verarbeitung der bestätigten Diagnose-Anfrage
-    if getattr(state, "diagnosis_confirmed", False):
-        state.diagnosis_confirmed = False  # Status löschen
-        symptom = state.active_symptom
-        varianten = get_instinktvarianten_for_symptom(symptom)
-        if not varianten:
-            # Rückfragenlogik starten
-            instinktfragen = {
-                "jagd": "Habe ich mich dabei wie auf der Jagd verhalten – aufmerksam, angespannt, ganz auf ein Ziel fokussiert?",
-                "rudel": "War es eine Situation, wo jemand aus unserer Gruppe gefehlt hat oder fremd war?",
-                "territorial": "War das in der Nähe unseres Zuhauses oder habe ich etwas bewacht?",
-                "sexual": "Gab es da vielleicht eine Begegnung mit einem anderen Hund, bei der ich mich aufgeregt habe?"
-            }
-            sym_state = state.symptoms.get(symptom)
-            if not sym_state:
-                sym_state = SymptomState()
-                state.symptoms[symptom] = sym_state
-            # asked_instincts initialisieren, falls nicht vorhanden
-            if not hasattr(sym_state, "asked_instincts") or sym_state.asked_instincts is None:
-                sym_state.asked_instincts = {}
-            for instinkt, frage in instinktfragen.items():
-                if not sym_state.asked_instincts.get(instinkt):
-                    sym_state.asked_instincts[instinkt] = True
-                    return [AgentMessage(role=dog_agent.role, content=frage)]
-            # Wenn alle Antworten vorhanden: Diagnoseversuch mit gesammelten Rückfragen
-            if hasattr(sym_state, "instinct_answers") and len(sym_state.instinct_answers) == 4:
-                antwort = diagnose_from_instinkte(symptom, sym_state.instinct_answers)
-                return [AgentMessage(role=dog_agent.role, content=antwort)]
-            return [AgentMessage(role=dog_agent.role, content="Ich bin mir nicht sicher. Wollen wir nochmal von vorne anfangen?")]
-        antwort = diagnose_from_instinkte(symptom, varianten)
-        return [AgentMessage(role=dog_agent.role, content=antwort)]
+    elif step == FlowStep.WAIT_FOR_CONFIRMATION:
+        if "ja" in user_input:
+            messages.append(AgentMessage(role=dog_agent.role, content="Gut, dann brauche ich ein bisschen mehr Kontext. Wo war das? Wer war dabei?"))
+            state.current_step = FlowStep.WAIT_FOR_CONTEXT
+        elif "nein" in user_input:
+            messages.append(AgentMessage(role=dog_agent.role, content="Okay, kein Problem. Wenn du es dir anders überlegst, sag einfach Bescheid."))
+            state.current_step = FlowStep.END_OR_RESTART
+        else:
+            messages.append(AgentMessage(role=dog_agent.role, content="Magst du mir einfach 'Ja' oder 'Nein' sagen?"))
 
-    # Initialisiere Agentenzustände bei Bedarf
-    for agent in [dog_agent.role]:
-        if agent not in state.agent_status:
-            state.agent_status[agent] = AgentStatus()
+    elif step == FlowStep.WAIT_FOR_CONTEXT:
+        if len(user_input) < 5:
+            messages.append(AgentMessage(role=dog_agent.role, content="Ich brauch noch ein bisschen mehr Info… Wo war das genau, was war los?"))
+        else:
+            messages.append(AgentMessage(role=dog_agent.role, content="Danke. Wenn ich das mit meinem Instinkt vergleiche, sieht es so aus: [Dummy Diagnose]. Willst du nochmal was anderes erzählen?"))
+            state.current_step = FlowStep.END_OR_RESTART
 
-    # Symptom im State erfassen
-    if symptom_input not in state.symptoms:
-        state.symptoms[symptom_input] = SymptomState(name=symptom_input)
-        state.active_symptom = symptom_input
+    elif step == FlowStep.END_OR_RESTART:
+        if "ja" in user_input:
+            state.current_step = FlowStep.WAIT_FOR_SYMPTOM
+            messages.append(AgentMessage(role=dog_agent.role, content="Okay, was möchtest du mir diesmal erzählen?"))
+        elif "nein" in user_input:
+            messages.append(AgentMessage(role=dog_agent.role, content="Alles klar, dann ruh ich mich mal aus. Bis bald."))
+        else:
+            messages.append(AgentMessage(role=dog_agent.role, content="Sag einfach 'Ja' für ein neues Thema oder 'Nein' zum Beenden."))
 
-    # 1. Hund schildert Erlebnis
-    if state.agent_status[dog_agent.role].is_first_message:
-        messages += dog_agent.respond(
-            user_input=symptom_input,
-            is_first_message=True
-        )
-        state.agent_status[dog_agent.role].is_first_message = False
+    else:
+        messages.append(AgentMessage(role=dog_agent.role, content="Ich bin kurz verwirrt… lass uns neu starten."))
+        state.current_step = FlowStep.GREETING
 
     return messages
