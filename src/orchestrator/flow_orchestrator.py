@@ -1,5 +1,3 @@
-# src/orchestrator/flow_orchestrator.py
-
 from typing import List
 from src.models.flow_models import AgentMessage, FlowStep
 from src.state.session_state import SessionState
@@ -51,13 +49,6 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             messages.append(AgentMessage(sender=dog_agent.role, text="Magst du mir einfach 'Ja' oder 'Nein' sagen?"))
 
     elif step == FlowStep.WAIT_FOR_CONTEXT:
-        if not validate_user_input(user_input):
-            messages.append(AgentMessage(
-                sender=dog_agent.role,
-                text="Ich bin nicht sicher, ob das mit der Situation zu tun hat. Möchtest du nochmal von vorne beginnen?"
-            ))
-            state.current_step = FlowStep.END_OR_RESTART
-            return messages
         if len(user_input) < 5:
             messages.append(AgentMessage(sender=dog_agent.role, text="Ich brauch noch ein bisschen mehr Info… Wo war das genau, was war los?"))
         else:
