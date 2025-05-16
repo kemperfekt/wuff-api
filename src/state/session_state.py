@@ -3,7 +3,7 @@
 from typing import Dict, List, Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
-from src.models.flow_models import FlowStep
+from src.models.flow_models import FlowStep, AgentMessage
 
 
 class AgentStatus(BaseModel):
@@ -31,6 +31,7 @@ class SessionState(BaseModel):
     diagnosis_confirmed: bool = False
     current_step: FlowStep = FlowStep.GREETING
     feedback: Optional[str] = None
+    messages: List[AgentMessage] = Field(default_factory=list)
 
 
 class SessionStore:
