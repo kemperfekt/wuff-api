@@ -4,6 +4,7 @@ from typing import List
 from src.models.flow_models import AgentMessage, FlowStep
 from src.state.session_state import SessionState
 from src.agents.dog_agent import DogAgent
+from src.services.gpt_service import validate_user_input
 
 dog_agent = DogAgent()
 
@@ -25,6 +26,13 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
         state.current_step = FlowStep.WAIT_FOR_SYMPTOM
 
     elif step == FlowStep.WAIT_FOR_SYMPTOM:
+        if not validate_user_input(user_input):
+            messages.append(AgentMessage(
+                sender=dog_agent.role,
+                text="Hm… das klingt nicht nach einem Hundeverhalten. Willst du neu starten?"
+            ))
+            state.current_step = FlowStep.END_OR_RESTART
+            return messages
         if len(user_input) < 5:
             messages.append(AgentMessage(sender=dog_agent.role, text="Magst du mir genauer sagen, was passiert ist?"))
         else:
@@ -43,6 +51,13 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             messages.append(AgentMessage(sender=dog_agent.role, text="Magst du mir einfach 'Ja' oder 'Nein' sagen?"))
 
     elif step == FlowStep.WAIT_FOR_CONTEXT:
+        if not validate_user_input(user_input):
+            messages.append(AgentMessage(
+                sender=dog_agent.role,
+                text="Ich bin nicht sicher, ob das mit der Situation zu tun hat. Möchtest du nochmal von vorne beginnen?"
+            ))
+            state.current_step = FlowStep.END_OR_RESTART
+            return messages
         if len(user_input) < 5:
             messages.append(AgentMessage(sender=dog_agent.role, text="Ich brauch noch ein bisschen mehr Info… Wo war das genau, was war los?"))
         else:
@@ -54,9 +69,14 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             state.current_step = FlowStep.WAIT_FOR_SYMPTOM
             messages.append(AgentMessage(sender=dog_agent.role, text="Okay, was möchtest du mir diesmal erzählen?"))
         elif "nein" in user_input:
-            messages.append(AgentMessage(sender=dog_agent.role, text="Alles klar, dann ruh ich mich mal aus. Bis bald."))
+            messages.append(AgentMessage(sender=dog_agent.role, text="Alles klar. Magst du mir noch sagen, ob dir mein Wuff geholfen hat?"))
+            state.current_step = FlowStep.FEEDBACK
         else:
             messages.append(AgentMessage(sender=dog_agent.role, text="Sag einfach 'Ja' für ein neues Thema oder 'Nein' zum Beenden."))
+
+    elif step == FlowStep.FEEDBACK:
+        state.feedback = user_input
+        messages.append(AgentMessage(sender=dog_agent.role, text="Danke für dein Feedback. Bis bald!"))
 
     else:
         messages.append(AgentMessage(sender=dog_agent.role, text="Ich bin kurz verwirrt… lass uns neu starten."))

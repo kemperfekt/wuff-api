@@ -13,6 +13,7 @@ class FlowStep(str, Enum):
     WAIT_FOR_CONTEXT = "wait_for_context"
     FINAL_DIAGNOSIS = "final_diagnosis"
     END_OR_RESTART = "end_or_restart"
+    FEEDBACK = "feedback"
 
 from pydantic import BaseModel
 from typing import Dict
@@ -25,4 +26,4 @@ class AgentMessage(BaseModel):
 
 class SymptomState(BaseModel):
     asked_instincts: Dict[str, bool] = {}  # z. B. "jagd": True
-    instinct_answers: Dict[str, str] = {}  # Antwort des Menschen je Instinkt
+    instinct_answers: Dict[str, str] = {}  # Antwort des Menschen je Instinkt</file>

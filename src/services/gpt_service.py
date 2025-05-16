@@ -40,3 +40,28 @@ def diagnose_from_instinkte(symptom: str, varianten: dict) -> str:
         "Vermeide Fachbegriffe, bleib bei deinem Gefühl. Keine Instinktnamen nennen. Sprich nicht über Menschen oder Training."
     )
     return ask_gpt(prompt)
+
+
+# --- Neue Funktion zur Validierung von Nutzereingaben ---
+def validate_user_input(text: str) -> bool:
+    """
+    Prüft, ob der Text etwas mit Hundeverhalten oder Hundetraining zu tun hat.
+    Antwortet mit True, wenn ja – sonst False.
+    """
+    prompt = (
+        "Antworte mit 'ja' oder 'nein'. "
+        "Hat die folgende Eingabe mit Hundeverhalten oder Hundetraining zu tun?\n\n"
+        f"{text}"
+    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1,
+            temperature=0,
+        )
+        answer = response.choices[0].message.content.strip().lower()
+        return "ja" in answer
+    except Exception as e:
+        print(f"[GPT-Fehler bei Validierung] {e}")
+        return True  # Fallback: lieber zulassen als blockieren

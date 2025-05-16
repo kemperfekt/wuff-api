@@ -30,6 +30,7 @@ class SessionState(BaseModel):
     awaiting_diagnosis_confirmation: bool = False
     diagnosis_confirmed: bool = False
     current_step: FlowStep = FlowStep.GREETING
+    feedback: Optional[str] = None
 
 
 class SessionStore:
