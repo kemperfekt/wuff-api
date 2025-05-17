@@ -2,10 +2,11 @@ from typing import List
 from src.models.flow_models import AgentMessage, FlowStep
 from src.state.session_state import SessionState
 from src.agents.dog_agent import DogAgent
+from src.agents.companion_agent import CompanionAgent
 from src.services.gpt_service import validate_user_input
-from src.services.session_logger import save_feedback_session
 
 dog_agent = DogAgent()
+companion_agent = CompanionAgent()
 
 
 def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
@@ -43,12 +44,14 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             return messages
         else:
             state.active_symptom = user_input
+            state.messages.append(AgentMessage(sender="user", text=user_input))
             messages.append(AgentMessage(sender=dog_agent.role, text="Ah, verstehe… Aus meiner Sicht fühlt sich das so an: [Dummy Hundeperspektive]. Magst Du erfahren, warum ich mich so verhalte?"))
             state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
             state.messages.extend(messages)
             return messages
 
     elif step == FlowStep.WAIT_FOR_CONFIRMATION:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
         if "ja" in user_input:
             messages.append(AgentMessage(sender=dog_agent.role, text="Gut, dann brauche ich ein bisschen mehr Kontext. Wo war das? Wer war dabei?"))
             state.current_step = FlowStep.WAIT_FOR_CONTEXT
@@ -65,6 +68,7 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             return messages
 
     elif step == FlowStep.WAIT_FOR_CONTEXT:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
         if len(user_input) < 5:
             messages.append(AgentMessage(sender=dog_agent.role, text="Ich brauch noch ein bisschen mehr Info… Wo war das genau, was war los?"))
             state.messages.extend(messages)
@@ -76,14 +80,16 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             return messages
 
     elif step == FlowStep.END_OR_RESTART:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
         if "ja" in user_input:
             state.current_step = FlowStep.WAIT_FOR_SYMPTOM
             messages.append(AgentMessage(sender=dog_agent.role, text="Okay, was möchtest du mir erzählen?"))
             state.messages.extend(messages)
             return messages
         elif "nein" in user_input:
-            messages.append(AgentMessage(sender=dog_agent.role, text="Alles klar. Magst du mir noch sagen, ob dir mein Wuff geholfen hat?"))
-            state.current_step = FlowStep.FEEDBACK
+            messages.append(AgentMessage(sender="companion", text=companion_agent.feedback_questions[0]))
+            state.feedback = []
+            state.current_step = FlowStep.FEEDBACK_Q1
             state.messages.extend(messages)
             return messages
         else:
@@ -91,10 +97,28 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             state.messages.extend(messages)
             return messages
 
-    elif step == FlowStep.FEEDBACK:
-        state.feedback = user_input
-        save_feedback_session(state, state.messages)
-        messages.append(AgentMessage(sender=dog_agent.role, text="Danke für dein Feedback. Wuff wuff!"))
+    elif step == FlowStep.FEEDBACK_Q1:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
+        state.feedback.append(user_input)
+        messages.append(AgentMessage(sender="companion", text=companion_agent.feedback_questions[1]))
+        state.current_step = FlowStep.FEEDBACK_Q2
+        state.messages.extend(messages)
+        return messages
+
+    elif step == FlowStep.FEEDBACK_Q2:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
+        state.feedback.append(user_input)
+        messages.append(AgentMessage(sender="companion", text=companion_agent.feedback_questions[2]))
+        state.current_step = FlowStep.FEEDBACK_Q3
+        state.messages.extend(messages)
+        return messages
+
+    elif step == FlowStep.FEEDBACK_Q3:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
+        state.feedback.append(user_input)
+        companion_agent.save_feedback(state.session_id, state.feedback, state.messages)
+        messages.append(AgentMessage(sender="companion", text="Danke für Dein Feedback! 🐾"))
+        state.current_step = FlowStep.GREETING
         state.messages.extend(messages)
         return messages
 
