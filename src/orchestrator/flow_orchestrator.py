@@ -24,7 +24,7 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
     messages: List[AgentMessage] = []
 
     if step == FlowStep.GREETING:
-        messages.append(AgentMessage(sender=dog_agent.role, text="Hallo! Ich bin dein Hund. Was ist los?"))
+        messages.append(AgentMessage(sender=dog_agent.role, text="Hallo! Schön, dass Du da bist. Ich erkläre Dir Hundeverhalten aus der Hundeperspektive. Bitte beschreibe ein Verhalten oder eine Situation!"))
         state.current_step = FlowStep.WAIT_FOR_SYMPTOM
         state.messages.extend(messages)
         return messages
@@ -38,8 +38,8 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             state.current_step = FlowStep.END_OR_RESTART
             state.messages.extend(messages)
             return messages
-        if len(user_input) < 5:
-            messages.append(AgentMessage(sender=dog_agent.role, text="Magst du mir genauer sagen, was passiert ist?"))
+        if len(user_input) < 10:
+            messages.append(AgentMessage(sender=dog_agent.role, text="Kannst Du das bitte etwas ausführlicher beschreiben?"))
             state.messages.extend(messages)
             return messages
         else:
@@ -53,7 +53,7 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
     elif step == FlowStep.WAIT_FOR_CONFIRMATION:
         state.messages.append(AgentMessage(sender="user", text=user_input))
         if "ja" in user_input:
-            messages.append(AgentMessage(sender=dog_agent.role, text="Gut, dann brauche ich ein bisschen mehr Kontext. Wo war das? Wer war dabei?"))
+            messages.append(AgentMessage(sender=dog_agent.role, text="Gut, dann brauche ich ein bisschen mehr Informationen. Bitte beschreibe, wie es zu der Situation kam, wer dabei war und was sonst noch wichtig sein könnte."))
             state.current_step = FlowStep.WAIT_FOR_CONTEXT
             state.messages.extend(messages)
             return messages
