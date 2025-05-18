@@ -13,7 +13,7 @@ app = FastAPI()
 # CORS-Block für Frontend-Zugriff
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # später ggf. Frontend-Domain einschränken
+    allow_origins=["https://app.wuffchat.de"],  # später ggf. Frontend-Domain einschränken
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
