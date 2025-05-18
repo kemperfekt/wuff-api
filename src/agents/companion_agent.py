@@ -25,6 +25,26 @@ class CompanionAgent:
             ],
             "messages": [msg.model_dump() for msg in messages],
         }
+        print(f"✅ Speichere Feedback für Session {session_id}")
+        print(f"🔍 SESSION_LOG_PATH: {base_path}")
+        print(f"🧪 Anzahl Antworten: {len(responses)}")
+        print(f"🧪 Anzahl Nachrichten: {len(messages)}")
+
+        # Pfad prüfen
+        print(f"📁 Zielpfad: {feedback_dir}")
+        print(f"📄 Datei: {feedback_dir / f'feedback_{session_id}.json'}")
+
+        # Dummy-Datei schreiben (nur zu Testzwecken!)
+        try:
+            feedback_dir.mkdir(parents=True, exist_ok=True)
+            testfile = feedback_dir / f"test_{session_id}.txt"
+            with open(testfile, "w") as tf:
+                tf.write("Test erfolgreich")
+            print("✅ Testdatei gespeichert.")
+        except Exception as e:
+            print(f"❌ Fehler beim Schreiben: {e}")
+            return
+
         base_path = os.environ.get("SESSION_LOG_PATH", "data")
         feedback_dir = Path(base_path).expanduser().resolve()
         print(f"📁 Feedback-Pfad: {feedback_dir}")
