@@ -116,7 +116,10 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
     elif step == FlowStep.FEEDBACK_Q3:
         state.messages.append(AgentMessage(sender="user", text=user_input))
         state.feedback.append(user_input)
-        companion_agent.save_feedback(state.session_id, state.feedback, state.messages)
+        try:
+            companion_agent.save_feedback(state.session_id, state.feedback, state.messages)
+        except Exception as e:
+            print(f"⚠️ Fehler beim Speichern des Feedbacks: {e} — Feedback wird nicht gespeichert.")
         messages.append(AgentMessage(sender="companion", text="Danke für Dein Feedback! 🐾"))
         state.current_step = FlowStep.GREETING
         state.messages.extend(messages)
