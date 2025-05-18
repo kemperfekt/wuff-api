@@ -30,6 +30,10 @@ class MessageRequest(BaseModel):
     session_id: str
     message: str
 
+@app.get("/")
+def read_root():
+    return {"status": "ok"}
+
 @app.post("/flow_intro")
 async def flow_intro():
     session = session_store.create_session()

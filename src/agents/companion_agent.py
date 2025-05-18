@@ -1,5 +1,6 @@
 import json
-from datetime import datetime
+import os
+from datetime import datetime, UTC
 from pathlib import Path
 from src.models.flow_models import AgentMessage
 
@@ -17,15 +18,17 @@ class CompanionAgent:
         """Speichert die Antworten als JSON-Datei unter /data/feedback_{session_id}.json"""
         feedback_data = {
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "responses": [
                 {"question": q, "answer": a}
                 for q, a in zip(self.feedback_questions, responses)
             ],
             "messages": [msg.model_dump() for msg in messages],
         }
-        Path("data").mkdir(exist_ok=True)
-        with open(f"data/feedback_{session_id}.json", "w", encoding="utf-8") as f:
+        base_path = os.environ.get("SESSION_LOG_PATH", "data")
+        feedback_dir = Path(base_path)
+        feedback_dir.mkdir(exist_ok=True)
+        with open(feedback_dir / f"feedback_{session_id}.json", "w", encoding="utf-8") as f:
             json.dump(feedback_data, f, ensure_ascii=False, indent=2)
 
     def get_intro_messages(self) -> list[AgentMessage]:
