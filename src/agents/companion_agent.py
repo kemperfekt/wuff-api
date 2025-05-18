@@ -25,7 +25,7 @@ class CompanionAgent:
                 {"question": q, "answer": a}
                 for q, a in zip(self.feedback_questions, responses)
             ],
-            "messages": [msg.model_dump() for msg in messages],
+            "messages": [msg.model_dump() for msg in messages], 
         }
         print(f"✅ Speichere Feedback für Session {session_id}")
         print(f"🔍 SESSION_LOG_PATH: {base_path}")
@@ -33,8 +33,11 @@ class CompanionAgent:
         print(f"🧪 Anzahl Antworten: {len(responses)}")
         print(f"🧪 Anzahl Nachrichten: {len(messages)}")
 
+        if not feedback_dir.parent.exists():
+            print(f"❌ Elternverzeichnis nicht vorhanden – darf nicht selbst erstellt werden: {feedback_dir.parent}")
+            return
         try:
-            feedback_dir.mkdir(parents=True, exist_ok=True)
+            feedback_dir.mkdir(exist_ok=True)
         except Exception as e:
             print(f"⚠️ Fehler beim Erstellen von {feedback_dir}: {e} — Feedback wird nicht gespeichert.")
             return
