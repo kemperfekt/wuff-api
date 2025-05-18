@@ -27,7 +27,7 @@ class CompanionAgent:
         }
         base_path = os.environ.get("SESSION_LOG_PATH", "data")
         feedback_dir = Path(base_path)
-        feedback_dir.mkdir(exist_ok=True)
+        feedback_dir.mkdir(parents=True, exist_ok=True)
         with open(feedback_dir / f"feedback_{session_id}.json", "w", encoding="utf-8") as f:
             json.dump(feedback_data, f, ensure_ascii=False, indent=2)
 
