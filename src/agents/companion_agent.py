@@ -15,9 +15,9 @@ class CompanionAgent:
         ]
 
     def save_feedback(self, session_id: str, responses: list[str], messages: list[AgentMessage]):
-        """Speichert die Antworten als JSON-Datei unter /data/feedback_{session_id}.json"""
+        """Speichert die Antworten als JSON-Datei im durch SESSION_LOG_PATH definierten Verzeichnis"""
         base_path = os.environ.get("SESSION_LOG_PATH", "data")
-        feedback_dir = Path(base_path).expanduser().resolve()
+        feedback_dir = Path(base_path)
         feedback_data = {
             "session_id": session_id,
             "timestamp": datetime.now(UTC).isoformat(),
