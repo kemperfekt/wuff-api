@@ -30,9 +30,9 @@ uvicorn main:app --reload
 
 ## 🔑 Required Environment Variables
 Make sure to set these system-wide:
-- `OPENAI_APIKEY` – your OpenAI key
+- `OPENAI_APIKEY` – Your OpenAI key
 - `WEAVIATE_API_KEY` – API key for your Weaviate Cloud instance
-- `WEAVIATE_URL` – the REST endpoint of your Weaviate Cloud
+- `WEAVIATE_URL` – The REST endpoint of your Weaviate Cloud
 
 ---
 
