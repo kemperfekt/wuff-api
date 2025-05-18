@@ -33,13 +33,13 @@ class CompanionAgent:
         print(f"🧪 Anzahl Antworten: {len(responses)}")
         print(f"🧪 Anzahl Nachrichten: {len(messages)}")
 
-        if not feedback_dir.parent.exists():
-            print(f"❌ Elternverzeichnis nicht vorhanden – darf nicht selbst erstellt werden: {feedback_dir.parent}")
-            return
         try:
-            feedback_dir.mkdir(exist_ok=True)
+            feedback_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError as e:
+            print(f"❌ Kein Schreibzugriff auf Feedback-Verzeichnis: {feedback_dir} — {e}")
+            return
         except Exception as e:
-            print(f"⚠️ Fehler beim Erstellen von {feedback_dir}: {e} — Feedback wird nicht gespeichert.")
+            print(f"⚠️ Fehler beim Erstellen von {feedback_dir}: {e}")
             return
         with open(feedback_dir / f"feedback_{session_id}.json", "w", encoding="utf-8") as f:
             json.dump(feedback_data, f, ensure_ascii=False, indent=2)
