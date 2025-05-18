@@ -12,7 +12,7 @@ class DogAgent(BaseAgent):
         super().__init__(
             name="Hund",
             role="dog",
-            greeting_text="Wuff! Ich bin dein Hund. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe.",
+            greeting_text="Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe.",
         )
 
     def ask_for_symptom(self) -> List[AgentMessage]:
