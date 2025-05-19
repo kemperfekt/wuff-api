@@ -21,7 +21,7 @@ class CompanionAgent:
         ]
 
     async def save_feedback(self, session_id: str, responses: List[str], messages: List[AgentMessage]):
-        """Speichert die Antworten als JSON-Datei im durch SESSION_LOG_PATH definierten Verzeichnis"""
+        """Speichert die Antworten als JSON-Datei im FS Bucket oder lokal"""
         try:
             base_path = os.environ.get("SESSION_LOG_PATH", "data")
             feedback_dir = Path(base_path)
@@ -41,32 +41,32 @@ class CompanionAgent:
             json_content = json.dumps(feedback_data, ensure_ascii=False, indent=2)
             
             # Prüfen, ob FS Bucket konfiguriert ist
-            fs_bucket = os.environ.get("CC_FS_BUCKET")
-            fs_username = os.environ.get("CC_FS_USERNAME")
-            fs_password = os.environ.get("CC_FS_PASSWORD")
+            bucket_host = os.environ.get("BUCKET_HOST")
+            bucket_username = os.environ.get("BUCKET_FTP_USERNAME")
+            bucket_password = os.environ.get("BUCKET_FTP_PASSWORD")
             
             # Umgebungsvariablen ausgeben (für Debugging)
-            print(f"🔍 FS Bucket: {fs_bucket}")
-            print(f"🔍 FS Username: {'gesetzt' if fs_username else 'nicht gesetzt'}")
-            print(f"🔍 FS Password: {'gesetzt' if fs_password else 'nicht gesetzt'}")
+            print(f"🔍 BUCKET_HOST: {bucket_host}")
+            print(f"🔍 BUCKET_FTP_USERNAME: {'gesetzt' if bucket_username else 'nicht gesetzt'}")
+            print(f"🔍 BUCKET_FTP_PASSWORD: {'gesetzt' if bucket_password else 'nicht gesetzt'}")
             
-            if fs_bucket and fs_username and fs_password:
+            if bucket_host and bucket_username and bucket_password:
                 # FS Bucket Speicherung verwenden
                 try:
-                    print(f"🪣 Speichere in FS Bucket: {fs_bucket}")
+                    print(f"🪣 Speichere in FS Bucket: {bucket_host}")
                     
                     # requests importieren (falls nicht installiert: pip install requests)
                     import requests
                     
                     # Auth Header erstellen
-                    auth_string = f"{fs_username}:{fs_password}"
+                    auth_string = f"{bucket_username}:{bucket_password}"
                     auth_encoded = base64.b64encode(auth_string.encode()).decode()
                     
                     # URL für die Speicherung
                     # Entferne führenden Slash, falls vorhanden
                     clean_base_path = base_path.lstrip("/")
                     path_in_bucket = f"{clean_base_path}/feedback_{session_id}.json"
-                    url = f"https://{fs_bucket}/{path_in_bucket}"
+                    url = f"https://{bucket_host}/{path_in_bucket}"
                     
                     print(f"🔗 Speicherpfad: {url}")
                     
@@ -91,8 +91,8 @@ class CompanionAgent:
                     print(f"⚠️ Fehler bei der FS Bucket Speicherung: {e}")
                     print("⚠️ Falle zurück auf lokale Speicherung...")
             else:
-                if fs_bucket:
-                    print("⚠️ CC_FS_USERNAME und CC_FS_PASSWORD müssen als Umgebungsvariablen gesetzt sein!")
+                if bucket_host:
+                    print("⚠️ BUCKET_FTP_USERNAME und BUCKET_FTP_PASSWORD müssen als Umgebungsvariablen gesetzt sein!")
                     print("⚠️ Falle zurück auf lokale Speicherung...")
                 else:
                     print("ℹ️ Kein FS Bucket konfiguriert, verwende lokale Speicherung")
