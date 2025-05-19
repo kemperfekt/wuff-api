@@ -74,7 +74,9 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
             state.messages.extend(messages)
             return messages
         else:
-            messages.append(AgentMessage(sender=dog_agent.role, text="Danke. Wenn ich das mit meinem Instinkt vergleiche, sieht es so aus: [Dummy Diagnose]. Willst du nochmal was anderes erzählen?"))
+            messages.append(AgentMessage(sender=dog_agent.role, text="Danke. Wenn ich das mit meinem Instinkt vergleiche, sieht es so aus: [Dummy Diagnose]."))
+            messages.append(AgentMessage(sender=dog_agent.role, text="Darf ich Dir eine Lernaufgabe vorschlagen, mit der Du Deinem Hund helfen kannst?"))
+            messages.append(AgentMessage(sender=dog_agent.role, text="[Dummy Lernaufgabe: Übe mit Deinem Hund an der Leine ruhig zu bleiben, indem Du bei jedem Ziehen stehen bleibst und erst weitergehst, wenn die Leine wieder locker ist.]"))
             state.current_step = FlowStep.END_OR_RESTART
             state.messages.extend(messages)
             return messages
@@ -114,6 +116,22 @@ def handle_message(user_input: str, state: SessionState) -> List[AgentMessage]:
         return messages
 
     elif step == FlowStep.FEEDBACK_Q3:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
+        state.feedback.append(user_input)
+        messages.append(AgentMessage(sender="companion", text=companion_agent.feedback_questions[3]))
+        state.current_step = FlowStep.FEEDBACK_Q4
+        state.messages.extend(messages)
+        return messages
+
+    elif step == FlowStep.FEEDBACK_Q4:
+        state.messages.append(AgentMessage(sender="user", text=user_input))
+        state.feedback.append(user_input)
+        messages.append(AgentMessage(sender="companion", text=companion_agent.feedback_questions[4]))
+        state.current_step = FlowStep.FEEDBACK_Q5
+        state.messages.extend(messages)
+        return messages
+
+    elif step == FlowStep.FEEDBACK_Q5:
         state.messages.append(AgentMessage(sender="user", text=user_input))
         state.feedback.append(user_input)
         try:

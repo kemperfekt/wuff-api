@@ -94,6 +94,12 @@ class DogAgent(BaseAgent):
         dog_view = self.describe_symptom_as_dog(match, user_input)
         messages.append(AgentMessage(sender=self.role, text=dog_view))
 
+        # Ergänze Übungsvorschlag
+        messages.append(AgentMessage(
+            sender=self.role,
+            text="Hier ist eine Übung, die zu deinem Fall passt: [Platzhalter Lernaufgabe]. Gibt es ein weiteres Verhalten, das Du mit mir besprechen möchtest?"
+        ))
+
         # Diagnose-Angebot
         diagnosis_message = self.ask_if_diagnosis_wanted()
         messages.append(diagnosis_message)

@@ -9,9 +9,11 @@ class CompanionAgent:
     def __init__(self):
         self.role = "companion"
         self.feedback_questions = [
-            "Wie hilfreich war die inhaltliche Beratung für Dich? (0–10)",
-            "Wie authentisch fandest Du den Dialog mit einem Hund? (0–10)",
-            "Wie wahrscheinlich ist es, dass Du Wuffchat weiterempfiehlst? (0–10)",
+            "Hast Du das Gefühl, dass Dir die Beratung bei Deinem Anliegen weitergeholfen hat?",
+            "Wie fandest Du die Sichtweise des Hundes – was hat Dir daran gefallen oder vielleicht irritiert?",
+            "Was denkst Du über die vorgeschlagene Übung – passt sie zu Deiner Situation?",
+            "Auf einer Skala von 0-10: Wie wahrscheinlich ist es, dass Du Wuffchat weiterempfiehlst?",
+            "Magst Du Deine E-Mail oder Telefonnummer für Rückfragen dalassen?",
         ]
 
     def save_feedback(self, session_id: str, responses: list[str], messages: list[AgentMessage]):

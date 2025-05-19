@@ -17,6 +17,8 @@ class FlowStep(str, Enum):
     FEEDBACK_Q1 = "feedback_q1"
     FEEDBACK_Q2 = "feedback_q2"
     FEEDBACK_Q3 = "feedback_q3"
+    FEEDBACK_Q4 = "feedback_q4"
+    FEEDBACK_Q5 = "feedback_q5"
 
 from pydantic import BaseModel
 from typing import Dict
@@ -25,8 +27,8 @@ from typing import Dict
 class AgentMessage(BaseModel):
     sender: str  # z. B. "coach", "dog", "mentor"
     text: str
-
+    
 
 class SymptomState(BaseModel):
     asked_instincts: Dict[str, bool] = {}  # z. B. "jagd": True
-    instinct_answers: Dict[str, str] = {}  # Antwort des Menschen je Instinkt</file></file>
+    instinct_answers: Dict[str, str] = {}  # Antwort des Menschen je Instinkt
