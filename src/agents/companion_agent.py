@@ -1,3 +1,4 @@
+# src/agents/companion_agent.py
 import json
 import os
 from datetime import datetime, UTC
@@ -16,7 +17,7 @@ class CompanionAgent:
             "Magst Du Deine E-Mail oder Telefonnummer für Rückfragen dalassen?",
         ]
 
-    def save_feedback(self, session_id: str, responses: list[str], messages: list[AgentMessage]):
+    async def save_feedback(self, session_id: str, responses: list[str], messages: list[AgentMessage]):
         """Speichert die Antworten als JSON-Datei im durch SESSION_LOG_PATH definierten Verzeichnis"""
         base_path = os.environ.get("SESSION_LOG_PATH", "data")
         feedback_dir = Path(base_path)

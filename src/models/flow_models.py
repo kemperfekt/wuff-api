@@ -12,6 +12,7 @@ class FlowStep(str, Enum):
     ASK_CONTEXT = "ask_context"
     WAIT_FOR_CONTEXT = "wait_for_context"
     FINAL_DIAGNOSIS = "final_diagnosis"
+    ASK_FOR_EXERCISE = "ask_for_exercise"
     END_OR_RESTART = "end_or_restart"
     FEEDBACK = "feedback"
     FEEDBACK_Q1 = "feedback_q1"

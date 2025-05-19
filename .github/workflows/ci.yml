@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, feature/dog-agentic ]
+    branches: [ main, feature/dog-MVP ]
   pull_request:
-    branches: [ main, feature/dog-agentic ]
+    branches: [ main, feature/dog-MVP ]
 
 jobs:
   test:
