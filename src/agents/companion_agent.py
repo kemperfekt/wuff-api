@@ -1,111 +1,101 @@
 # src/agents/companion_agent.py
 import json
 import os
-import base64
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from pathlib import Path
-from typing import List, Optional
-
-# AgentMessage importieren
+from typing import List, Dict, Any
 from src.models.flow_models import AgentMessage
+from src.services.redis_service import RedisService
 
 class CompanionAgent:
     def __init__(self):
         self.role = "companion"
+        # DSGVO-konformere Formulierung der letzten Frage
         self.feedback_questions = [
             "Hast Du das Gefühl, dass Dir die Beratung bei Deinem Anliegen weitergeholfen hat?",
             "Wie fandest Du die Sichtweise des Hundes – was hat Dir daran gefallen oder vielleicht irritiert?",
             "Was denkst Du über die vorgeschlagene Übung – passt sie zu Deiner Situation?",
             "Auf einer Skala von 0-10: Wie wahrscheinlich ist es, dass Du Wuffchat weiterempfiehlst?",
-            "Magst Du Deine E-Mail oder Telefonnummer für Rückfragen dalassen?",
+            "Optional: Deine E-Mail oder Telefonnummer für eventuelle Rückfragen. Diese wird ausschließlich für Rückfragen zu deinem Feedback verwendet und nach 3 Monaten automatisch gelöscht.",
         ]
+        # Redis-Service initialisieren
+        self.redis_service = RedisService.get_instance()
+        
+        # Aufbewahrungsdauer in Tagen (z.B. 90 Tage = 3 Monate)
+        self.retention_days = 90
+        
+    def _prepare_feedback_data(self, session_id: str, responses: List[str], messages: List[AgentMessage]) -> Dict[str, Any]:
+        """
+        Bereitet die Feedback-Daten zur Speicherung vor.
+        """
+        # Ablaufdatum berechnen (DSGVO-konform)
+        expiration_date = (datetime.now(UTC) + timedelta(days=self.retention_days)).isoformat()
+        
+        # Feedback-Antworten vorbereiten
+        prepared_responses = []
+        
+        for question, answer in zip(self.feedback_questions, responses):
+            prepared_responses.append({
+                "question": question,
+                "answer": answer
+            })
+        
+        # Feedback-Daten zusammenstellen
+        return {
+            "session_id": session_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "expiration_date": expiration_date,  # DSGVO-Löschfrist
+            "responses": prepared_responses,
+            "messages": [msg.model_dump() for msg in messages], 
+        }
 
     async def save_feedback(self, session_id: str, responses: List[str], messages: List[AgentMessage]):
-        """Speichert die Antworten als JSON-Datei im FS Bucket oder lokal"""
+        """Speichert die Antworten in Redis mit DSGVO-konformer Ablaufzeit"""
         try:
-            base_path = os.environ.get("SESSION_LOG_PATH", "data")
-            feedback_dir = Path(base_path)
-            feedback_data = {
-                "session_id": session_id,
-                "timestamp": datetime.now(UTC).isoformat(),
-                "responses": [
-                    {"question": q, "answer": a}
-                    for q, a in zip(self.feedback_questions, responses)
-                ],
-                "messages": [msg.model_dump() for msg in messages], 
-            }
+            # Feedback-Daten vorbereiten
+            feedback_data = self._prepare_feedback_data(session_id, responses, messages)
+            
             print(f"✅ Speichere Feedback für Session {session_id}")
-            print(f"🔍 SESSION_LOG_PATH: {base_path}")
             
-            # JSON-Daten vorbereiten
-            json_content = json.dumps(feedback_data, ensure_ascii=False, indent=2)
+            # Redis-Schlüssel definieren
+            redis_key = f"feedback:{session_id}"
             
-            # Prüfen, ob FS Bucket konfiguriert ist
-            bucket_host = os.environ.get("BUCKET_HOST")
-            bucket_username = os.environ.get("BUCKET_FTP_USERNAME")
-            bucket_password = os.environ.get("BUCKET_FTP_PASSWORD")
+            # Ablaufzeit in Sekunden berechnen (für Redis-Schlüsselablauf)
+            expire_seconds = self.retention_days * 24 * 60 * 60
             
-            # Umgebungsvariablen ausgeben (für Debugging)
-            print(f"🔍 BUCKET_HOST: {bucket_host}")
-            print(f"🔍 BUCKET_FTP_USERNAME: {'gesetzt' if bucket_username else 'nicht gesetzt'}")
-            print(f"🔍 BUCKET_FTP_PASSWORD: {'gesetzt' if bucket_password else 'nicht gesetzt'}")
-            
-            if bucket_host and bucket_username and bucket_password:
-                # FS Bucket Speicherung verwenden
-                try:
-                    print(f"🪣 Speichere in FS Bucket: {bucket_host}")
+            # In Redis speichern MIT Ablaufzeit
+            if self.redis_service.is_connected():
+                success = self.redis_service.set(redis_key, feedback_data, expire=expire_seconds)
+                
+                if success:
+                    print(f"✅ Feedback erfolgreich in Redis gespeichert: {redis_key}")
+                    print(f"✅ Automatische Löschung nach {self.retention_days} Tagen eingestellt")
                     
-                    # requests importieren (falls nicht installiert: pip install requests)
-                    import requests
+                    # Zum Feedback-Index hinzufügen für einfache Abfrage aller Feedbacks
+                    all_feedback_key = "all_feedback_ids"
+                    all_ids = self.redis_service.get(all_feedback_key) or []
+                    if session_id not in all_ids:
+                        all_ids.append(session_id)
+                        self.redis_service.set(all_feedback_key, all_ids)
                     
-                    # Auth Header erstellen
-                    auth_string = f"{bucket_username}:{bucket_password}"
-                    auth_encoded = base64.b64encode(auth_string.encode()).decode()
-                    
-                    # URL für die Speicherung
-                    # Entferne führenden Slash, falls vorhanden
-                    clean_base_path = base_path.lstrip("/")
-                    path_in_bucket = f"{clean_base_path}/feedback_{session_id}.json"
-                    url = f"https://{bucket_host}/{path_in_bucket}"
-                    
-                    print(f"🔗 Speicherpfad: {url}")
-                    
-                    # Datei hochladen
-                    response = requests.put(
-                        url,
-                        data=json_content,
-                        headers={
-                            "Authorization": f"Basic {auth_encoded}",
-                            "Content-Type": "application/json"
-                        }
-                    )
-                    
-                    print(f"📊 HTTP Status: {response.status_code}")
-                    
-                    if response.status_code not in [200, 201]:
-                        raise Exception(f"HTTP-Fehler: {response.status_code} - {response.text}")
-                    
-                    print(f"✅ Feedback erfolgreich im FS Bucket gespeichert: {path_in_bucket}")
                     return
-                except Exception as e:
-                    print(f"⚠️ Fehler bei der FS Bucket Speicherung: {e}")
-                    print("⚠️ Falle zurück auf lokale Speicherung...")
-            else:
-                if bucket_host:
-                    print("⚠️ BUCKET_FTP_USERNAME und BUCKET_FTP_PASSWORD müssen als Umgebungsvariablen gesetzt sein!")
-                    print("⚠️ Falle zurück auf lokale Speicherung...")
                 else:
-                    print("ℹ️ Kein FS Bucket konfiguriert, verwende lokale Speicherung")
+                    print("⚠️ Fehler beim Speichern in Redis")
+            else:
+                print("⚠️ Redis nicht verbunden, Feedback kann nicht gespeichert werden")
             
             # Lokale Speicherung als Fallback
+            base_path = os.environ.get("SESSION_LOG_PATH", "data")
+            feedback_dir = Path(base_path)
+            
             try:
                 # Verzeichnis erstellen, falls es nicht existiert
                 feedback_dir.mkdir(parents=True, exist_ok=True)
                 
-                # Lokale Datei schreiben
+                # Feedback als JSON speichern
                 file_path = feedback_dir / f"feedback_{session_id}.json"
                 with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(json_content)
+                    json.dump(feedback_data, f, ensure_ascii=False, indent=2)
                 
                 print(f"✅ Feedback lokal gespeichert: {file_path}")
             except Exception as e:
@@ -123,3 +113,38 @@ class CompanionAgent:
                 for question in self.feedback_questions
             ],
         ]
+        
+    async def cleanup_expired_feedback(self):
+        """Löscht abgelaufene Feedback-Daten (DSGVO-Compliance)"""
+        if not self.redis_service.is_connected():
+            print("⚠️ Redis nicht verbunden, Bereinigung nicht möglich")
+            return
+            
+        all_ids = self.redis_service.get("all_feedback_ids") or []
+        current_date = datetime.now(UTC)
+        removed_ids = []
+        
+        for session_id in all_ids:
+            feedback = self.redis_service.get(f"feedback:{session_id}")
+            if not feedback:
+                removed_ids.append(session_id)
+                continue
+                
+            # Prüfen, ob das Ablaufdatum erreicht ist
+            expiration_date = feedback.get("expiration_date")
+            if expiration_date:
+                try:
+                    exp_date = datetime.fromisoformat(expiration_date)
+                    if current_date > exp_date:
+                        # Feedback löschen
+                        self.redis_service.delete(f"feedback:{session_id}")
+                        removed_ids.append(session_id)
+                        print(f"🗑️ Abgelaufenes Feedback gelöscht: {session_id}")
+                except (ValueError, TypeError):
+                    pass
+        
+        # Bereinigte IDs aus dem Index entfernen
+        if removed_ids:
+            updated_ids = [id for id in all_ids if id not in removed_ids]
+            self.redis_service.set("all_feedback_ids", updated_ids)
+            print(f"🧹 {len(removed_ids)} abgelaufene Feedback-Einträge bereinigt")
