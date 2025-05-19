@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Grundlegende Anwendungseinstellungen"""
-    APP_NAME: str = "HundeBot"
+    APP_NAME: str = "WuffChat"
     DEBUG: bool = False
     
     # LLM-Einstellungen
