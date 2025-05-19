@@ -2,8 +2,7 @@
 
 import os
 import aiohttp
-import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, List, Any, Optional
 
 class WeaviateQueryAgentService:
     """Service für die Interaktion mit dem Weaviate Query Agent"""
@@ -48,9 +47,6 @@ class WeaviateQueryAgentService:
             payload["collection"] = collection_name
         
         print(f"🤖 Weaviate Query Agent Anfrage: '{query}'")
-        print(f"🔗 Endpoint: {self.api_url}")
-        if collection_name:
-            print(f"📚 Collection: {collection_name}")
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -65,102 +61,12 @@ class WeaviateQueryAgentService:
                         raise Exception(f"Fehler bei der Anfrage an den Weaviate Query Agent: {response.status} - {text}")
                     
                     result = await response.json()
-                    print(f"✅ Query Agent Antwort erhalten: {result}")
+                    print(f"✅ Query Agent Antwort erhalten")
                     return result
-        except aiohttp.ClientError as e:
-            print(f"⚠️ Fehler bei der Verbindung zum Weaviate Query Agent: {e}")
-            raise Exception(f"Verbindungsfehler: {e}")
         except Exception as e:
-            print(f"⚠️ Unerwarteter Fehler bei der Anfrage: {e}")
+            print(f"⚠️ Fehler bei der Anfrage an den Weaviate Query Agent: {e}")
             raise
 
 
-async def get_diagnosis(symptom: str, context: str, query_agent: WeaviateQueryAgentService) -> Dict[str, Any]:
-    """
-    Generiert eine Diagnose mithilfe des Weaviate Query Agents
-    
-    Args:
-        symptom: Das beschriebene Hundeverhalten
-        context: Zusätzlicher Kontext zur Situation
-        query_agent: Eine Instanz des WeaviateQueryAgentService
-        
-    Returns:
-        Ein Dictionary mit Instinkt, Erklärung und ggf. weiteren Informationen
-    """
-    try:
-        query = f"Welcher Instinkt ist bei folgendem Hundeverhalten aktiv: '{symptom}'. Zusätzlicher Kontext: '{context}'"
-        
-        result = await query_agent.query(
-            query=query,
-            collection_name="Instinkt"  # Anpassen an deine Collection-Namen
-        )
-        
-        # Standardrückgabe, falls keine aussagekräftigen Daten zurückkommen
-        diagnosis = {
-            "instinct": "unbekannter Instinkt",
-            "explanation": "Ich kann nicht genau bestimmen, welcher Instinkt hier aktiv ist.",
-            "confidence": 0.0
-        }
-        
-        # Extrahiere relevante Daten aus dem Ergebnis
-        if "data" in result and result["data"]:
-            # Passe dies an das tatsächliche Format der Antwort an
-            diagnosis = {
-                "instinct": result["data"].get("instinct", diagnosis["instinct"]),
-                "explanation": result["data"].get("explanation", diagnosis["explanation"]),
-                "confidence": result["data"].get("confidence", 0.7)  # Default-Wert, falls nicht vorhanden
-            }
-        
-        return diagnosis
-    
-    except Exception as e:
-        print(f"⚠️ Fehler bei der Diagnose-Generierung: {e}")
-        return {
-            "instinct": "unbekannter Instinkt",
-            "explanation": "Ich konnte keine Diagnose erstellen aufgrund eines technischen Problems.",
-            "confidence": 0.0
-        }
-
-
-async def get_exercise(instinct: str, symptom: str, query_agent: WeaviateQueryAgentService) -> Dict[str, Any]:
-    """
-    Generiert einen Übungsvorschlag mithilfe des Weaviate Query Agents
-    
-    Args:
-        instinct: Der identifizierte Instinkt
-        symptom: Das beschriebene Hundeverhalten
-        query_agent: Eine Instanz des WeaviateQueryAgentService
-        
-    Returns:
-        Ein Dictionary mit der Übung und weiteren Informationen
-    """
-    try:
-        query = f"Gib mir eine passende Übung für einen Hund mit aktivem {instinct}, der folgendes Verhalten zeigt: '{symptom}'"
-        
-        result = await query_agent.query(
-            query=query,
-            collection_name="Uebung"  # Anpassen an deine Collection-Namen
-        )
-        
-        # Standardrückgabe, falls keine aussagekräftigen Daten zurückkommen
-        exercise_result = {
-            "exercise": f"Eine gute Übung bei aktivem {instinct} ist generell, mit dem Hund an seiner Impulskontrolle zu arbeiten.",
-            "confidence": 0.5
-        }
-        
-        # Extrahiere relevante Daten aus dem Ergebnis
-        if "data" in result and result["data"]:
-            # Passe dies an das tatsächliche Format der Antwort an
-            exercise = result["data"].get("exercise", "")
-            if exercise:
-                exercise_result["exercise"] = exercise
-                exercise_result["confidence"] = result["data"].get("confidence", 0.7)  # Default-Wert, falls nicht vorhanden
-        
-        return exercise_result
-    
-    except Exception as e:
-        print(f"⚠️ Fehler bei der Übungs-Generierung: {e}")
-        return {
-            "exercise": "Ich empfehle, mit einem Hundetrainer zu sprechen, um eine passende Übung für dieses Verhalten zu finden.",
-            "confidence": 0.0
-        }
+# Singleton-Instanz für einfachen Zugriff
+query_agent_service = WeaviateQueryAgentService()

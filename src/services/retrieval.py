@@ -1,37 +1,115 @@
 # src/services/retrieval.py
 
-from src.services.weaviate_service import search_relevant_chunks
 import json
+from typing import Optional
+from src.services.weaviate_service import query_agent_service
 
-def get_symptom_info(symptom_text: str) -> str:
+async def get_symptom_info(symptom: str) -> Optional[str]:
     """
-    Fragt relevante Informationen zum Symptom über Weaviate ab und gibt sie als Klartext zurück.
+    Sucht nach Informationen zu einem Hundeverhalten/Symptom mit dem Weaviate Query Agent.
+    
+    Args:
+        symptom: Das beschriebene Hundeverhalten
+        
+    Returns:
+        Ein Text mit relevanten Informationen oder None, wenn nichts gefunden wurde
     """
-    print("▶ get_symptom_info:", symptom_text)
-    chunks = search_relevant_chunks(symptom_text, class_name="Symptom")
-    print("🧠 Treffer (Symptom):", chunks)
-    return chunks[0] if chunks else ""
-
-def get_hundeperspektive(symptom_text: str) -> str:
-    """
-    Fragt relevante Hundeperspektive-Inhalte über Weaviate ab und gibt sie als Klartext zurück.
-    """
-    print("▶ get_hundeperspektive:", symptom_text)
-    chunks = search_relevant_chunks(symptom_text, class_name="Hundeperspektive")
-    print("🧠 Treffer (Hundeperspektive):", chunks)
-    return "\n".join(chunks)
-
-def get_instinktvarianten_for_symptom(symptom_text: str) -> dict:
-    """
-    Gibt die Instinktvarianten (jagd, rudel, territorial, sexual) zum Symptom als Dictionary zurück.
-    """
-    print("▶ get_instinktvarianten_for_symptom:", symptom_text)
-    chunks = search_relevant_chunks(symptom_text, class_name="Symptom")
-    if not chunks:
-        print("⚠️ Kein Treffer.")
-        return {}
     try:
-        return json.loads(chunks[0])["instinkt_varianten"]
+        # Direktes Query an den Weaviate Query Agent
+        query = f"Beschreibe das folgende Hundeverhalten: {symptom}"
+        
+        result = await query_agent_service.query(
+            query=query,
+            collection_name="Symptom"
+        )
+        
+        # Ergebnis extrahieren
+        if "data" in result and result["data"]:
+            # Je nach Struktur deiner Daten könnte dies angepasst werden müssen
+            if "text" in result["data"]:
+                return result["data"]["text"]
+            elif "description" in result["data"]:
+                return result["data"]["description"]
+            elif "content" in result["data"]:
+                return result["data"]["content"]
+            else:
+                # Versuche, das ganze data-Objekt zu serialisieren
+                return json.dumps(result["data"])
+        
+        return None
     except Exception as e:
-        print("❌ Fehler beim Parsen:", e)
-        return {}
+        print(f"⚠️ Fehler bei der Symptomsuche: {e}")
+        return None
+
+
+async def get_instinct_info(instinct: str) -> Optional[str]:
+    """
+    Sucht nach Informationen zu einem Hundeinstinkt mit dem Weaviate Query Agent.
+    
+    Args:
+        instinct: Der Name des Instinkts
+        
+    Returns:
+        Ein Text mit relevanten Informationen oder None, wenn nichts gefunden wurde
+    """
+    try:
+        # Direktes Query an den Weaviate Query Agent
+        query = f"Beschreibe den folgenden Hundeinstinkt: {instinct}"
+        
+        result = await query_agent_service.query(
+            query=query,
+            collection_name="Instinkt"
+        )
+        
+        # Ergebnis extrahieren
+        if "data" in result and result["data"]:
+            # Je nach Struktur deiner Daten könnte dies angepasst werden müssen
+            if "description" in result["data"]:
+                return result["data"]["description"]
+            elif "text" in result["data"]:
+                return result["data"]["text"]
+            else:
+                # Versuche, das ganze data-Objekt zu serialisieren
+                return json.dumps(result["data"])
+        
+        return None
+    except Exception as e:
+        print(f"⚠️ Fehler bei der Instinktsuche: {e}")
+        return None
+
+
+async def get_exercise_info(symptom: str, instinct: str) -> Optional[str]:
+    """
+    Sucht nach passenden Übungen für ein Hundeverhalten und einen Instinkt.
+    
+    Args:
+        symptom: Das beschriebene Hundeverhalten
+        instinct: Der identifizierte Instinkt
+        
+    Returns:
+        Ein Text mit einer passenden Übung oder None, wenn nichts gefunden wurde
+    """
+    try:
+        # Direktes Query an den Weaviate Query Agent
+        query = f"Finde eine passende Übung für einen Hund mit aktivem {instinct}-Instinkt, der folgendes Verhalten zeigt: {symptom}"
+        
+        result = await query_agent_service.query(
+            query=query,
+            collection_name="Uebung"
+        )
+        
+        # Ergebnis extrahieren
+        if "data" in result and result["data"]:
+            # Je nach Struktur deiner Daten könnte dies angepasst werden müssen
+            if "exercise" in result["data"]:
+                return result["data"]["exercise"]
+            elif "text" in result["data"]:
+                return result["data"]["text"]
+            else:
+                # Versuche, das ganze data-Objekt zu serialisieren
+                return json.dumps(result["data"])
+        
+        return None
+    except Exception as e:
+        print(f"⚠️ Fehler bei der Übungssuche: {e}")
+        return None
