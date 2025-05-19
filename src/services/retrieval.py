@@ -23,6 +23,12 @@ async def get_symptom_info(symptom: str) -> Optional[str]:
             collection_name="Symptom"
         )
         
+        # Prüfen auf Fehler
+        if "error" in result and result["error"]:
+            print(f"⚠️ Fehler bei der Symptomsuche: {result['error']}")
+            # Fallback-Text (optional)
+            return "Ich kann zu diesem Verhalten leider keine spezifischen Informationen finden."
+        
         # Ergebnis extrahieren
         if "data" in result and result["data"]:
             # Je nach Struktur deiner Daten könnte dies angepasst werden müssen
@@ -61,6 +67,12 @@ async def get_instinct_info(instinct: str) -> Optional[str]:
             collection_name="Instinkt"
         )
         
+        # Prüfen auf Fehler
+        if "error" in result and result["error"]:
+            print(f"⚠️ Fehler bei der Instinktsuche: {result['error']}")
+            # Fallback-Text (optional)
+            return f"Ich kann zu dem {instinct} leider keine spezifischen Informationen finden."
+        
         # Ergebnis extrahieren
         if "data" in result and result["data"]:
             # Je nach Struktur deiner Daten könnte dies angepasst werden müssen
@@ -97,6 +109,12 @@ async def get_exercise_info(symptom: str, instinct: str) -> Optional[str]:
             query=query,
             collection_name="Uebung"
         )
+        
+        # Prüfen auf Fehler
+        if "error" in result and result["error"]:
+            print(f"⚠️ Fehler bei der Übungssuche: {result['error']}")
+            # Fallback-Text (optional)
+            return f"Eine allgemeine Übung für Hunde mit {instinct} ist, ihre Impulskontrolle zu trainieren."
         
         # Ergebnis extrahieren
         if "data" in result and result["data"]:

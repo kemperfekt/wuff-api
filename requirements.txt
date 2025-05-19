@@ -2,7 +2,9 @@ fastapi
 uvicorn
 openai
 pydantic
+requests
 weaviate-client
+pydantic-settings   
 python-dotenv
 pytest
 pytest-cov
