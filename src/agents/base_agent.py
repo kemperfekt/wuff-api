@@ -1,51 +1,29 @@
 # src/agents/base_agent.py
-
-from typing import Optional, List
+from abc import ABC, abstractmethod
+from typing import List, Dict, Optional, Any
 from src.models.flow_models import AgentMessage
-from src.services.gpt_service import ask_gpt
 
-
-class BaseAgent:
-    def __init__(
-        self,
-        name: str,
-        role: str,
-        greeting_text: Optional[str] = None,
-        question_text: Optional[str] = None,
-    ):
+class BaseAgent(ABC):
+    """Basisklasse für alle Agenten"""
+    
+    def __init__(self, name: str, role: str):
         self.name = name
         self.role = role
-        self.greeting_text = greeting_text
-        self.question_text = question_text
-
-    def respond(
-        self,
-        user_input: str,
-        use_rag: bool = True,
-        rag_class: str = "Symptom",
-        is_first_message: bool = False,
-    ) -> List[AgentMessage]:
+    
+    @abstractmethod
+    async def respond(self, 
+                     user_input: str, 
+                     session_id: str, 
+                     context: Optional[Dict[str, Any]] = None) -> List[AgentMessage]:
         """
-        Generiert eine Antwort auf eine Nutzereingabe – entweder mit oder ohne Kontext (RAG).
-        Gibt eine Liste von AgentMessage-Objekten zurück.
+        Verarbeitet eine Benutzereingabe und generiert Antworten.
+        
+        Args:
+            user_input: Text des Benutzers
+            session_id: ID der aktuellen Session
+            context: Optionaler Kontext (z.B. ist_erste_nachricht)
+            
+        Returns:
+            Liste von AgentMessage-Objekten als Antwort
         """
-
-        messages = []
-
-        # Optional: Begrüßung beim Erstkontakt
-        if is_first_message and self.greeting_text:
-            messages.append(AgentMessage(role=self.role, content=self.greeting_text))
-
-        # Hauptantwort: GPT mit oder ohne RAG
-        if use_rag:
-            reply = ask_with_context(user_input, collection=rag_class)
-        else:
-            reply = ask_gpt(user_input)
-
-        messages.append(AgentMessage(role=self.role, content=reply))
-
-        # Optional: Abschlussfrage
-        if self.question_text:
-            messages.append(AgentMessage(role=self.role, content=self.question_text))
-
-        return messages
+        pass
