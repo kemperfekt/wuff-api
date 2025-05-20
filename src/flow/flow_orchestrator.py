@@ -99,48 +99,63 @@ class FlowOrchestrator:
             text="Hallo! Schön, dass Du da bist. Ich erkläre Dir Hundeverhalten aus der Hundeperspektive. Bitte beschreibe ein Verhalten oder eine Situation!"
         )]
     
-    async def _handle_symptom_input(self, state: SessionState, user_input: str) -> List[AgentMessage]:
-        """Behandelt die Eingabe eines Symptoms mit RAG-basierter Antwort"""
-        if not user_input:
+async def _handle_symptom_input(self, state: SessionState, user_input: str) -> List[AgentMessage]:
+    """Behandelt die Eingabe eines Symptoms - delegiert an DogAgent"""
+    if not user_input:
+        return [AgentMessage(
+            sender=self.dog_agent.role,
+            text="Ich verstehe nicht ganz. Kannst du mir ein Verhalten beschreiben?"
+        )]
+    
+    is_valid = await validate_user_input(user_input)
+    if not is_valid:
+        state.current_step = FlowStep.END_OR_RESTART
+        return [AgentMessage(
+            sender=self.dog_agent.role,
+            text="Hm… das klingt nicht nach einem Hundeverhalten. Willst du neu starten?"
+        )]
+    
+    if len(user_input) < 10:
+        return [AgentMessage(
+            sender=self.dog_agent.role,
+            text="Kannst Du das bitte etwas ausführlicher beschreiben?"
+        )]
+    
+    # Verhalten speichern und zur Bestätigung weitergehen
+    state.active_symptom = user_input
+    state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
+    
+    # GEÄNDERT: Delegation an den DogAgent für konsistente Antworten
+    try:
+        # Kontext mit relevanten Informationen anreichern
+        context = {
+            "is_first_response": True,  # Gibt an, dass dies die erste Antwort ist
+            "additional_context": ""    # Kein zusätzlicher Kontext in diesem Schritt
+        }
+        
+        # WICHTIG: Nur eine Teil-Antwort vom DogAgent anfordern
+        partial_response = await self.dog_agent.respond(user_input, state.session_id, context)
+        
+        # Für den ersten Schritt nur die erste Nachricht zurückgeben und fragen, ob der User mehr wissen möchte
+        if partial_response and len(partial_response) > 0:
+            first_message = partial_response[0]
             return [AgentMessage(
                 sender=self.dog_agent.role,
-                text="Ich verstehe nicht ganz. Kannst du mir ein Verhalten beschreiben?"
+                text=f"{first_message.text} Magst Du mehr erfahren, warum ich mich so verhalte?"
             )]
-        
-        is_valid = await validate_user_input(user_input)
-        if not is_valid:
-            state.current_step = FlowStep.END_OR_RESTART
-            return [AgentMessage(
-                sender=self.dog_agent.role,
-                text="Hm… das klingt nicht nach einem Hundeverhalten. Willst du neu starten?"
-            )]
-        
-        if len(user_input) < 10:
-            return [AgentMessage(
-                sender=self.dog_agent.role,
-                text="Kannst Du das bitte etwas ausführlicher beschreiben?"
-            )]
-        
-        # Verhalten speichern und zur Bestätigung weitergehen
-        state.active_symptom = user_input
-        state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
-        
-        # RAG-basierte Antwort holen
-        try:
-            # Kurzanalyse für die erste Antwort
-            analysis = await RAGService.get_comprehensive_analysis(user_input, "")
-            dog_view = await RAGService.generate_dog_perspective(user_input, analysis)
-            
-            return [AgentMessage(
-                sender=self.dog_agent.role,
-                text=f"{dog_view} Magst Du mehr erfahren, warum ich mich so verhalte?"
-            )]
-        except Exception as e:
-            print(f"❌ Fehler bei der RAG-Analyse: {e}")
+        else:
+            # Fallback, falls keine Antwort erhalten wurde
             return [AgentMessage(
                 sender=self.dog_agent.role,
                 text="Aus meiner Sicht fühlt sich das so an... Magst Du erfahren, warum ich mich so verhalte?"
             )]
+            
+    except Exception as e:
+        print(f"❌ Fehler bei der Symptomanalyse: {e}")
+        return [AgentMessage(
+            sender=self.dog_agent.role,
+            text="Aus meiner Sicht fühlt sich das so an... Magst Du erfahren, warum ich mich so verhalte?"
+        )]
     
     async def _handle_confirmation(self, state: SessionState, user_input: str) -> List[AgentMessage]:
         """Behandelt die Bestätigung des Nutzers, mehr zu erfahren"""
@@ -279,7 +294,7 @@ class FlowOrchestrator:
         state.current_step = FlowStep.GREETING
         return [AgentMessage(
             sender="companion", 
-            text="Danke für Dein Feedback! 🐾"
+            text="Danke für Dein Feedback!"
         )]
 
 

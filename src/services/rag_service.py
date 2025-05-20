@@ -6,6 +6,10 @@ from src.config.prompts import COMBINED_INSTINCT_QUERY_TEMPLATE
 from src.services.gpt_service import ask_gpt
 from src.core.error_handling import with_error_handling, RAGServiceError, GPTServiceError
 
+# Einfaches In-Memory-Cache für schnellere Antworten
+_analysis_cache = {}
+_dog_perspective_cache = {}
+
 # Fallback-Analyse außerhalb der Klasse definieren
 def get_fallback_analysis() -> Dict[str, Any]:
     """Gibt eine Fallback-Analyse zurück, wenn ein Fehler auftritt"""
@@ -31,37 +35,47 @@ class RAGService:
     async def get_comprehensive_analysis(symptom: str, context: str = "") -> Dict[str, Any]:
         """
         Führt eine umfassende Analyse eines Hundeverhaltens durch mit dem Query Agent.
+        Mit Caching für schnellere Antworten.
         """
-        # Eine präzise Abfrage formulieren
+        # Cache-Schlüssel generieren
+        cache_key = f"{symptom}:{context}"
+        
+        # Cache prüfen
+        if cache_key in _analysis_cache:
+            print("✅ Lade Analyse aus Cache")
+            return _analysis_cache[cache_key]
+            
+        # Eine präzisere Abfrage für bessere Ergebnisse
         query = f"""
         Analysiere das folgende Hundeverhalten: '{symptom}'
         
         Identifiziere den wahrscheinlichsten Instinkt (Jagd, Rudel, Territorial, Sexual) 
-        und gib eine Beschreibung zu jedem der vier Instinkte, wie er mit diesem Verhalten zusammenhängen könnte.
+        und gib eine Beschreibung aus Hundesicht zu jedem der vier Instinkte im Zusammenhang mit diesem Verhalten.
         
         Zusätzlicher Kontext: {context}
         
-        Liefere das Ergebnis strukturiert mit:
+        Liefere das Ergebnis strukturiert mit folgenden Feldern:
         - primary_instinct: Der dominanteste Instinkt 
         - primary_description: Beschreibung, warum dieser Instinkt primär ist
-        - all_instincts: Kurzbeschreibungen zu jedem der vier Instinkte
+        - all_instincts: Kurzbeschreibungen für jeden der vier Instinkte
         - exercise: Ein Übungsvorschlag für die Hundehalter
         - confidence: Ein Wert zwischen 0 und 1, der angibt, wie sicher die Analyse ist
         """
         
-        # Abfrage an die Instinktveranlagung-Collection senden
+        # Instinktveranlagung-Collection für beste Ergebnisse
         result = await query_agent_service.query(
             query=query,
-            collection_name="Instinktveranlagung"  # Diese Collection für Instinktanalysen nutzen
+            collection_name="Instinktveranlagung"  # Änderung zur präziseren Collection
         )
         
-        # Fehlerbehandlung
+        # Überprüfen auf Fehler
         if "error" in result and result["error"]:
             print(f"⚠️ Fehler bei der RAG-Analyse: {result['error']}")
             return get_fallback_analysis()
         
-        # Versuche, strukturierte Daten aus der Antwort zu extrahieren
+        # Daten aus dem Ergebnis extrahieren
         if "data" in result and result["data"]:
+            # Versuche, strukturierte Daten aus der Antwort zu extrahieren
             try:
                 # Wenn das Ergebnis ein String ist, versuche es zu parsen
                 if isinstance(result["data"], str):
@@ -98,7 +112,7 @@ class RAGService:
                         elif "sexual" in line.lower():
                             all_instincts["sexual"] = line.split(":", 1)[1].strip() if ":" in line else line
                     
-                    return {
+                    parsed_result = {
                         "primary_instinct": primary_instinct or "unbekannter Instinkt",
                         "primary_description": primary_description or "Keine Beschreibung verfügbar",
                         "all_instincts": all_instincts or {
@@ -111,9 +125,14 @@ class RAGService:
                         "confidence": confidence,
                         "success": True
                     }
+                    
+                    # Ergebnis cachen
+                    _analysis_cache[cache_key] = parsed_result
+                    return parsed_result
+                    
                 elif isinstance(result["data"], dict):
                     # Wenn das Ergebnis bereits ein Dict ist
-                    return {
+                    parsed_result = {
                         "primary_instinct": result["data"].get("primary_instinct", "unbekannter Instinkt"),
                         "primary_description": result["data"].get("primary_description", "Keine Beschreibung verfügbar"),
                         "all_instincts": result["data"].get("all_instincts", {}),
@@ -121,9 +140,14 @@ class RAGService:
                         "confidence": result["data"].get("confidence", 0.5),
                         "success": True
                     }
+                    
+                    # Ergebnis cachen
+                    _analysis_cache[cache_key] = parsed_result
+                    return parsed_result
             except Exception as e:
                 print(f"⚠️ Fehler bei der Verarbeitung der RAG-Antwort: {e}")
         
+        # Fallback-Werte zurückgeben
         return get_fallback_analysis()
     
     @staticmethod
@@ -131,14 +155,17 @@ class RAGService:
     async def generate_dog_perspective(symptom: str, analysis: Dict[str, Any]) -> str:
         """
         Generiert eine Hundeperspektive basierend auf der RAG-Analyse.
-        
-        Args:
-            symptom: Das beschriebene Hundeverhalten
-            analysis: Die Ergebnisse der RAG-Analyse
-            
-        Returns:
-            Eine textuelle Beschreibung aus Hundesicht
+        Mit Caching für schnellere Antworten.
         """
+        # Cache-Schlüssel generieren
+        primary_instinct = analysis.get("primary_instinct", "unbekannt")
+        cache_key = f"{symptom}:{primary_instinct}"
+        
+        # Cache prüfen
+        if cache_key in _dog_perspective_cache:
+            print("✅ Lade Hundeperspektive aus Cache")
+            return _dog_perspective_cache[cache_key]
+        
         # Varianten für die verschiedenen Instinkte vorbereiten
         varianten = analysis.get("all_instincts", {})
         
@@ -169,8 +196,33 @@ class RAGService:
         Vermeide Fachbegriffe, bleib bei deinem Gefühl. Nenne keine Instinktnamen. Sprich nicht über Menschen oder Training.
         """
         
-        # GPT für die Textgenerierung nutzen
+        # Direkter Versuch, die Perspektive aus der Instinkte-Collection zu holen
+        try:
+            result = await query_agent_service.query(
+                query=f"""
+                Als Hund beschreibe ich, wie ich das folgende Verhalten aus meiner Sicht erlebe: '{symptom}'
+                
+                Der wahrscheinlichste Instinkt dahinter ist {primary_instinct}.
+                
+                Antworte als Hund in der ersten Person (Ich-Form). 
+                Sei authentisch und emotional aus Hundesicht.
+                Vermeide Fachbegriffe und sprich nicht über Menschen oder Training.
+                """,
+                collection_name="Instinkte"  # Primär in der Instinkte-Collection suchen
+            )
+            
+            if "data" in result and result["data"]:
+                # Ergebnis cachen
+                _dog_perspective_cache[cache_key] = result["data"]
+                return result["data"]
+        except Exception as e:
+            print(f"⚠️ Fehler bei der Instinkte-Abfrage: {e}")
+        
+        # GPT für die Textgenerierung nutzen als Fallback
         dog_view = await ask_gpt(prompt)
+        
+        # Ergebnis cachen
+        _dog_perspective_cache[cache_key] = dog_view
         return dog_view
     
     @staticmethod
