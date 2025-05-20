@@ -6,6 +6,7 @@ from src.state.session_state import SessionState, SessionStore
 from src.agents.dog_agent import DogAgent
 from src.agents.companion_agent import CompanionAgent
 from src.services.gpt_service import validate_user_input
+from src.services.rag_service import RAGService
 
 # Handler-Typ-Definition für bessere Lesbarkeit
 StepHandler = Callable[[SessionState, str], Awaitable[List[AgentMessage]]]
