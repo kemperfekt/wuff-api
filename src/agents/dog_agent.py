@@ -23,6 +23,14 @@ class DogAgent(BaseAgent):
                      context: Optional[Dict[str, Any]] = None) -> List[AgentMessage]:
         """
         Verarbeitet eine Benutzereingabe und generiert Antworten.
+        
+        Args:
+            user_input: Text des Benutzers
+            session_id: ID der aktuellen Session
+            context: Optionaler Kontext mit zusätzlichen Informationen
+            
+        Returns:
+            Liste von AgentMessage-Objekten als Antwort
         """
         context = context or {}
         messages = []
@@ -38,8 +46,22 @@ class DogAgent(BaseAgent):
         # Prüfe, ob Nutzer "ja" antwortet auf "Nochmal von vorne?"
         if user_input.lower() == "ja" and getattr(self, 'last_bot_message', "") == "Nochmal von vorne?":
             return self._get_greeting_messages()
+        
+        # Spezielle Kontextflags prüfen
+        is_first_response = context.get("is_first_response", False)
+        is_diagnose = context.get("is_diagnose", False)
+        exercise_only = context.get("exercise_only", False)
+        additional_context = context.get("additional_context", "")
             
         try:
+            # Verkürzter Flow für bestimmte Anfragen
+            if exercise_only:
+                # Nur eine Übungsempfehlung zurückgeben
+                symptom = context.get("symptom", user_input)
+                analysis = await RAGService.get_comprehensive_analysis(symptom, "")
+                exercise = await self._get_exercise_recommendation(symptom, analysis)
+                return [AgentMessage(sender=self.role, text=exercise)]
+            
             # Schritt 1: Verhaltensanalyse mit RAG durchführen
             symptom_info = await get_symptom_info(user_input)
             
@@ -61,8 +83,24 @@ class DogAgent(BaseAgent):
                     return messages + self._get_greeting_messages()
             
             # Schritt 2: Umfassende RAG-Analyse durchführen
-            context_text = context.get("additional_context", "")
-            analysis = await RAGService.get_comprehensive_analysis(user_input, context_text)
+            analysis = await RAGService.get_comprehensive_analysis(user_input, additional_context)
+            
+            # Falls nur erste Antwort gewünscht (erste Phase im Flow)
+            if is_first_response:
+                dog_view = await self._get_dog_perspective(user_input, analysis)
+                return [AgentMessage(sender=self.role, text=dog_view)]
+            
+            # Falls Diagnose gewünscht (nach Kontexteingabe)
+            if is_diagnose:
+                diagnosis = analysis.get("primary_description", "Keine Diagnose verfügbar")
+                primary_instinct = analysis.get("primary_instinct", "unbekannter Instinkt")
+                
+                # Besser formatierte Diagnose
+                formatted_diagnosis = f"Ich erkenne bei diesem Verhalten hauptsächlich meinen {primary_instinct}-Instinkt. {diagnosis}"
+                
+                return [AgentMessage(sender=self.role, text=formatted_diagnosis)]
+            
+            # Standardfall: Vollständige Antwort
             
             # Schritt 3: Hundeperspektive generieren
             dog_view = await self._get_dog_perspective(user_input, analysis)
@@ -90,6 +128,8 @@ class DogAgent(BaseAgent):
             
         except Exception as e:
             print(f"❌ Fehler bei der Verarbeitung: {e}")
+            import traceback
+            traceback.print_exc()
             messages.append(AgentMessage(
                 sender=self.role,
                 text="Es tut mir leid, ich habe gerade ein technisches Problem. Kannst du es später noch einmal versuchen?"
@@ -124,7 +164,7 @@ class DogAgent(BaseAgent):
         prompt = EXERCISE_TEMPLATE.format(symptom=symptom, match=match)
         return await ask_gpt(prompt)
     
-    # HINZUGEFÜGT: Korrekte Einrückung der Hilfsmethoden
+    # KORRIGIERT: Korrekte Einrückung der Hilfsmethoden innerhalb der Klasse
     async def _get_general_info(self, query: str) -> Optional[str]:
         """Sucht allgemeine Informationen in der Allgemein-Collection"""
         try:
@@ -180,4 +220,4 @@ class DogAgent(BaseAgent):
             print(f"❌ Fehler bei der Übungssuche: {e}")
         
         # Fallback
-        return analysis.get("exercise", "Übe mit deinem Hund Impulskontrolle durch kurze, regelmäßige Trainingseinheiten.")
+        return analysis.get("exercise", "Übe mit deinem Hund Abschalttraining, durch gemeinsames Entspannen in ausreichendem Abstand von Reizen, die für Deinen Hund anstrengend sind.")
