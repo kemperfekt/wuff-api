@@ -163,8 +163,7 @@ class DogAgent(BaseAgent):
         # Verwende den Prompt aus der Konfiguration
         prompt = EXERCISE_TEMPLATE.format(symptom=symptom, match=match)
         return await ask_gpt(prompt)
-    
-    # KORRIGIERT: Korrekte Einrückung der Hilfsmethoden innerhalb der Klasse
+        
     async def _get_general_info(self, query: str) -> Optional[str]:
         """Sucht allgemeine Informationen in der Allgemein-Collection"""
         try:

@@ -55,6 +55,41 @@ Finde eine passende Übung für einen Hund mit aktivem {instinct}-Instinkt,
 der folgendes Verhalten zeigt: {symptom}
 """
 
+# Weaviate Query Agent Templates
+DOG_PERSPECTIVE_QUERY_TEMPLATE = """
+Gibt es in der Collection ein passendes Symptom zu folgendem Verhalten?
+'{symptom}'
+
+Falls ja, gib die schnelldiagnose aus der hundeperspektive wieder.
+Falls nein, beschreibe knapp und emotional aus Hundesicht, wie ich das Verhalten erlebe.
+
+Antworte immer in der Ich-Form aus Sicht des Hundes.
+Vermeide Fachbegriffe und Training oder Mensch-bezogene Themen.
+"""
+
+INSTINCT_ANALYSIS_QUERY_TEMPLATE = """
+Vergleiche diese Kombination aus Verhalten und Kontext mit den vier Instinktvarianten:
+Verhalten: {symptom}
+Zusätzlicher Kontext: {context}
+
+Identifiziere den oder die führenden Instinkte (Jagd, Rudel, Territorial, Sexual).
+Erkläre dann aus Hundesicht (Ich-Form), warum dieser Instinkt/diese Instinkte in dieser Situation aktiv ist/sind.
+
+Halte die Erklärung einfach, emotional und vermeide Fachbegriffe.
+"""
+
+EXERCISE_QUERY_TEMPLATE = """
+Finde in der Erziehung-Collection eine passende Lernaufgabe für dieses Verhalten:
+'{symptom}'
+
+Die Übung sollte:
+- konkret und praktisch umsetzbar sein
+- dem Hundehalter klare Anweisungen geben
+- möglichst auf den dominanten Instinkt abgestimmt sein
+
+Formuliere eine klare, prägnante Anleitung.
+"""
+
 # Erweiterter Query für effizientere RAG
 COMBINED_INSTINCT_QUERY_TEMPLATE = """
 Für das Hundeverhalten: '{symptom}' mit Kontext: '{context}'

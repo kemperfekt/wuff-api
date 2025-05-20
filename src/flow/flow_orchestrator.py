@@ -7,6 +7,7 @@ from src.agents.dog_agent import DogAgent
 from src.agents.companion_agent import CompanionAgent
 from src.services.gpt_service import validate_user_input
 from src.services.rag_service import RAGService
+from src.config.prompts import DOG_PERSPECTIVE_QUERY_TEMPLATE, INSTINCT_ANALYSIS_QUERY_TEMPLATE, EXERCISE_QUERY_TEMPLATE
 
 # Handler-Typ-Definition für bessere Lesbarkeit
 StepHandler = Callable[[SessionState, str], Awaitable[List[AgentMessage]]]
@@ -102,71 +103,40 @@ class FlowOrchestrator:
         )]
     
     async def _handle_symptom_input(self, state: SessionState, user_input: str) -> List[AgentMessage]:
-        """Behandelt die Eingabe eines Symptoms mit RAG-basierter Antwort"""
-        if not user_input:
+        """Behandelt die Eingabe eines Symptoms - fokussiert auf schnelle Hundeperspektive"""
+        if not user_input or len(user_input) < 10:
             return [AgentMessage(
                 sender=self.dog_agent.role,
-                text="Ich verstehe nicht ganz. Kannst du mir ein Verhalten beschreiben?"
-            )]
-        
-        is_valid = await validate_user_input(user_input)
-        if not is_valid:
-            state.current_step = FlowStep.END_OR_RESTART
-            return [AgentMessage(
-                sender=self.dog_agent.role,
-                text="Hm… das klingt nicht nach einem Hundeverhalten. Willst du neu starten?"
-            )]
-        
-        if len(user_input) < 10:
-            return [AgentMessage(
-                sender=self.dog_agent.role,
-                text="Kannst Du das bitte etwas ausführlicher beschreiben?"
+                text="Kannst Du das Verhalten bitte etwas ausführlicher beschreiben?"
             )]
         
         # Verhalten speichern und zur Bestätigung weitergehen
         state.active_symptom = user_input
         state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
         
-        # VERBESSERT: Delegation an den DogAgent für konsistente Antworten
         try:
-            # Direkter Aufruf an den DogAgent mit minimalen Kontext
-            context = {
-                "is_first_response": True,  # Gibt an, dass dies die erste Antwort ist
-                "additional_context": ""    # Kein zusätzlicher Kontext in diesem Schritt
-            }
-            
-            # Teilantwort vom DogAgent anfordern
-            # Hier wird nur eine erste Perspektive angefordert, nicht die komplette Analyse
-            response = await self.dog_agent.respond(
-                user_input, 
-                state.session_id, 
-                context
+            # Optimiert: Sucht direkt in der Symptome-Collection nach passendem Verhalten
+            result = await query_agent_service.query(
+                query=DOG_PERSPECTIVE_QUERY_TEMPLATE.format(symptom=user_input),
+                collection_name="Symptome"  # Gezielt in Symptome suchen
             )
             
-            # Die erste Nachricht verwenden, falls vorhanden
-            if response and len(response) > 0:
-                # Erste Antwort nehmen und fragen, ob der Nutzer mehr wissen möchte
-                dog_view = response[0].text
-                return [AgentMessage(
-                    sender=self.dog_agent.role,
-                    text=f"{dog_view} Magst Du mehr erfahren, warum ich mich so verhalte?"
-                )]
-            else:
-                # Fallback, wenn keine Antwort erhalten wurde
-                return [AgentMessage(
-                    sender=self.dog_agent.role,
-                    text="Aus meiner Sicht fühlt sich das so an... Magst Du erfahren, warum ich mich so verhalte?"
-                )]
+            dog_view = "Aus meiner Hundesicht fühlt sich das so an..."
+            if "data" in result and result["data"]:
+                dog_view = result["data"]
+                
+            return [AgentMessage(
+                sender=self.dog_agent.role,
+                text=f"{dog_view} Magst Du mehr erfahren, warum ich mich so verhalte?"
+            )]
                 
         except Exception as e:
             print(f"❌ Fehler bei der Symptomanalyse: {e}")
-            import traceback
-            traceback.print_exc()
             return [AgentMessage(
                 sender=self.dog_agent.role,
-                text="Aus meiner Sicht fühlt sich das so an... Magst Du erfahren, warum ich mich so verhalte?"
-            )]
-    
+                text="Als Hund spüre ich verschiedene Impulse bei diesem Verhalten. Magst Du mehr erfahren, warum ich mich so verhalte?"
+            )]    
+        
     async def _handle_confirmation(self, state: SessionState, user_input: str) -> List[AgentMessage]:
         """Behandelt die Bestätigung des Nutzers, mehr zu erfahren"""
         if "ja" in user_input:
@@ -188,66 +158,47 @@ class FlowOrchestrator:
             )]
     
     async def _handle_context_input(self, state: SessionState, user_input: str) -> List[AgentMessage]:
-        """Behandelt die Kontexteingabe des Nutzers"""
+        """Behandelt die Kontexteingabe - Fokus auf Instinktanalyse"""
         if len(user_input) < 5:
             return [AgentMessage(
                 sender=self.dog_agent.role,
                 text="Ich brauch noch ein bisschen mehr Info… Wo war das genau, was war los?"
             )]
         
-        # Zusätzlichen Kontext speichern
+        # Alle Eingaben des Benutzers zusammenfassen
         symptom = state.active_symptom
-        additional_context = user_input
+        context = user_input
+        combined_input = f"Verhalten: {symptom}\nZusätzlicher Kontext: {context}"
         
-        # VERBESSERT: Den DogAgent für die Diagnose verwenden
         try:
-            context = {
-                "is_diagnose": True,  # Dies signalisiert dem DogAgent, dass eine Diagnose gewünscht ist
-                "additional_context": additional_context
-            }
-            
-            # Vollständige Antwort vom DogAgent anfordern
-            response = await self.dog_agent.respond(
-                symptom,
-                state.session_id,
-                context
+            # Direkter Prompt für Instinktanalyse
+            result = await query_agent_service.query(
+                query=INSTINCT_ANALYSIS_QUERY_TEMPLATE.format(
+                    symptom=state.active_symptom, 
+                    context=user_input
+                ),
+                collection_name="Instinkte"  # Gezielt in Instinkte suchen
             )
             
-            # Wenn wir mindestens zwei Nachrichten haben (Diagnose und Übungsvorschlag)
-            if response and len(response) >= 2:
-                # Diagnose und andere Nachricht(en) extrahieren
-                diagnosis = response[0].text
+            diagnosis = "Ich erkenne verschiedene innere Impulse in meinem Verhalten."
+            if "data" in result and result["data"]:
+                diagnosis = result["data"]
                 
-                # Zum nächsten Schritt mit der Übungsfrage gehen
-                state.current_step = FlowStep.ASK_FOR_EXERCISE
-                
-                return [
-                    AgentMessage(
-                        sender=self.dog_agent.role,
-                        text=f"Danke. Wenn ich das mit meinem Instinkt vergleiche, sieht es so aus: {diagnosis}"
-                    ),
-                    AgentMessage(
-                        sender=self.dog_agent.role,
-                        text="Möchtest du eine Lernaufgabe, die dir in dieser Situation helfen kann?"
-                    )
-                ]
-            else:
-                # Fallback wenn nicht genug Antworten
-                state.current_step = FlowStep.ASK_FOR_EXERCISE
-                return [
-                    AgentMessage(
-                        sender=self.dog_agent.role,
-                        text="Danke. Wenn ich das mit meinem Instinkt vergleiche, sieht es so aus: Ich folge meinem natürlichen Verhalten, das durch meine Instinkte gesteuert wird."
-                    ),
-                    AgentMessage(
-                        sender=self.dog_agent.role,
-                        text="Möchtest du eine Lernaufgabe, die dir in dieser Situation helfen kann?"
-                    )
-                ]
+            # Zum nächsten Schritt mit der Übungsfrage gehen
+            state.current_step = FlowStep.ASK_FOR_EXERCISE
+            
+            return [
+                AgentMessage(
+                    sender=self.dog_agent.role,
+                    text=f"Danke. Wenn ich das mit meinem Instinkt vergleiche, sieht es so aus: {diagnosis}"
+                ),
+                AgentMessage(
+                    sender=self.dog_agent.role,
+                    text="Möchtest du eine Lernaufgabe, die dir in dieser Situation helfen kann?"
+                )
+            ]
         except Exception as e:
             print(f"❌ Fehler bei der Kontextverarbeitung: {e}")
-            import traceback
-            traceback.print_exc()
             state.current_step = FlowStep.ASK_FOR_EXERCISE
             return [
                 AgentMessage(
@@ -258,30 +209,20 @@ class FlowOrchestrator:
                     sender=self.dog_agent.role,
                     text="Möchtest du eine Lernaufgabe, die dir in dieser Situation helfen kann?"
                 )
-            ]
-    
+            ]    
     async def _handle_exercise_request(self, state: SessionState, user_input: str) -> List[AgentMessage]:
-        """Behandelt die Anfrage nach einer Übung"""
+        """Behandelt die Anfrage nach einer Übung - direkte Suche in Erziehung"""
         if "ja" in user_input:
-            # Übungsvorschlag vom DogAgent holen, wenn möglich
             try:
-                context = {
-                    "exercise_only": True,  # Dies signalisiert dem DogAgent, dass nur eine Übung gewünscht ist
-                    "symptom": state.active_symptom
-                }
-                
-                response = await self.dog_agent.respond(
-                    state.active_symptom,
-                    state.session_id,
-                    context
+                # Direkte Übungssuche in Erziehung-Collection
+                result = await query_agent_service.query(
+                    query=EXERCISE_QUERY_TEMPLATE.format(symptom=state.active_symptom),
+                    collection_name="Erziehung"  # Gezielt in Erziehung suchen
                 )
                 
-                # Wenn Antwort vorhanden, diese verwenden
-                if response and len(response) > 0:
-                    exercise = response[0].text
-                else:
-                    # Fallback
-                    exercise = "Übe mit deinem Hund an der Leine ruhig zu bleiben, indem Du bei jedem Ziehen stehen bleibst und erst weitergehst, wenn die Leine wieder locker ist."
+                exercise = "Eine hilfreiche Übung wäre, mit deinem Hund Impulskontrolle zu trainieren, indem du klare Grenzen setzt und alternatives Verhalten belohnst."
+                if "data" in result and result["data"]:
+                    exercise = result["data"]
                     
                 state.current_step = FlowStep.END_OR_RESTART
                 return [
@@ -296,8 +237,6 @@ class FlowOrchestrator:
                 ]
             except Exception as e:
                 print(f"❌ Fehler beim Abrufen der Übung: {e}")
-                import traceback
-                traceback.print_exc()
                 # Fallback im Fehlerfall
                 state.current_step = FlowStep.END_OR_RESTART
                 return [
@@ -322,8 +261,7 @@ class FlowOrchestrator:
             return [AgentMessage(
                 sender=self.dog_agent.role,
                 text="Bitte antworte mit 'Ja' oder 'Nein' - möchtest du eine Lernaufgabe?"
-            )]
-    
+            )]    
     async def _handle_end_or_restart(self, state: SessionState, user_input: str) -> List[AgentMessage]:
         """Behandelt das Ende oder einen Neustart"""
         if "ja" in user_input:
