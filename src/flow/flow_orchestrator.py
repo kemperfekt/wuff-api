@@ -99,7 +99,7 @@ class FlowOrchestrator:
         )]
     
     async def _handle_symptom_input(self, state: SessionState, user_input: str) -> List[AgentMessage]:
-        """Behandelt die Eingabe eines Symptoms"""
+        """Behandelt die Eingabe eines Symptoms mit RAG-basierter Antwort"""
         if not user_input:
             return [AgentMessage(
                 sender=self.dog_agent.role,
@@ -124,10 +124,22 @@ class FlowOrchestrator:
         state.active_symptom = user_input
         state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
         
-        return [AgentMessage(
-            sender=self.dog_agent.role,
-            text="Ah, verstehe… Aus meiner Sicht fühlt sich das so an: [Dummy Hundeperspektive]. Magst Du erfahren, warum ich mich so verhalte?"
-        )]
+        # RAG-basierte Antwort holen
+        try:
+            # Kurzanalyse für die erste Antwort
+            analysis = await RAGService.get_comprehensive_analysis(user_input, "")
+            dog_view = await RAGService.generate_dog_perspective(user_input, analysis)
+            
+            return [AgentMessage(
+                sender=self.dog_agent.role,
+                text=f"{dog_view} Magst Du mehr erfahren, warum ich mich so verhalte?"
+            )]
+        except Exception as e:
+            print(f"❌ Fehler bei der RAG-Analyse: {e}")
+            return [AgentMessage(
+                sender=self.dog_agent.role,
+                text="Aus meiner Sicht fühlt sich das so an... Magst Du erfahren, warum ich mich so verhalte?"
+            )]
     
     async def _handle_confirmation(self, state: SessionState, user_input: str) -> List[AgentMessage]:
         """Behandelt die Bestätigung des Nutzers, mehr zu erfahren"""

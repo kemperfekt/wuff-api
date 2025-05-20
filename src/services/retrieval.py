@@ -3,42 +3,40 @@ import json
 from typing import Optional
 from src.services.weaviate_service import query_agent_service
 
-# Diese Funktion war bereits async
 async def get_symptom_info(symptom: str) -> Optional[str]:
     """
     Sucht nach Informationen zu einem Hundeverhalten/Symptom mit dem Weaviate Query Agent.
-    
-    Args:
-        symptom: Das beschriebene Hundeverhalten
-        
-    Returns:
-        Ein Text mit relevanten Informationen oder None, wenn nichts gefunden wurde
+    Nutzt gezielt die Symptome-Collection.
     """
     try:
-        # Direktes Query an den Weaviate Query Agent
-        query = f"Beschreibe das folgende Hundeverhalten: {symptom}"
+        # Direkte Abfrage an die Symptome-Collection
+        query = f"Finde Informationen zu folgendem Hundeverhalten: {symptom}"
         
         result = await query_agent_service.query(
             query=query,
-            collection_name="Symptom"
+            collection_name="Symptome"  # Gezielt in Symptome-Collection suchen
         )
         
-        # Verbesserte Fehlerbehandlung
+        # Fehlerbehandlung
         if "error" in result and result["error"]:
             print(f"⚠️ Fehler bei der Symptomsuche: {result['error']}")
-            return "Ich kann zu diesem Verhalten leider keine spezifischen Informationen finden."
+            return None
         
         # Ergebnis extrahieren
         if "data" in result and result["data"]:
-            # Überprüfe verschiedene mögliche Felder
-            for field in ["text", "description", "content"]:
-                if field in result["data"]:
+            # Wenn symptom_name im Ergebnis vorhanden ist, wurde ein passendes Symptom gefunden
+            if isinstance(result["data"], dict) and "symptom_name" in result["data"]:
+                return result["data"]["schnelldiagnose"]
+            # Überprüfe sonstige mögliche Felder
+            for field in ["beschreibung", "text", "content"]:
+                if isinstance(result["data"], dict) and field in result["data"]:
                     return result["data"][field]
             
-            # Wenn keines der erwarteten Felder vorhanden ist
-            return json.dumps(result["data"])
+            # Wenn ein String zurückgegeben wurde
+            if isinstance(result["data"], str):
+                return result["data"]
         
-        return "Ich habe leider keine passenden Informationen zu diesem Verhalten gefunden."
+        return None
     except Exception as e:
         print(f"⚠️ Fehler bei der Symptomsuche: {e}")
-        return "Es gab ein technisches Problem bei der Suche nach Informationen zu diesem Verhalten."
+        return None

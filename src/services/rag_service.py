@@ -32,23 +32,28 @@ class RAGService:
         """
         Führt eine umfassende Analyse eines Hundeverhaltens durch mit einer einzigen Abfrage.
         Kombiniert Instinkt-Identifikation, Beschreibungen und Übungsvorschläge.
-        
-        Args:
-            symptom: Das beschriebene Hundeverhalten
-            context: Zusätzlicher Kontext zur Situation
-            
-        Returns:
-            Ein Dictionary mit allen relevanten Informationen
         """
-        # Eine einzige, komplexe Abfrage statt mehrerer einzelner
-        query = COMBINED_INSTINCT_QUERY_TEMPLATE.format(
-            symptom=symptom,
-            context=context
-        )
+        # Eine präzisere Abfrage für bessere Ergebnisse
+        query = f"""
+        Analysiere das folgende Hundeverhalten: '{symptom}'
         
+        Identifiziere den wahrscheinlichsten Instinkt (Jagd, Rudel, Territorial, Sexual) 
+        und gib eine Beschreibung aus Hundesicht zu jedem der vier Instinkte im Zusammenhang mit diesem Verhalten.
+        
+        Zusätzlicher Kontext: {context}
+        
+        Liefere das Ergebnis strukturiert mit folgenden Feldern:
+        - primary_instinct: Der dominanteste Instinkt 
+        - primary_description: Beschreibung, warum dieser Instinkt primär ist
+        - all_instincts: Kurzbeschreibungen für jeden der vier Instinkte
+        - exercise: Ein Übungsvorschlag für die Hundehalter
+        - confidence: Ein Wert zwischen 0 und 1, der angibt, wie sicher die Analyse ist
+        """
+        
+        # Instinktveranlagung-Collection für beste Ergebnisse
         result = await query_agent_service.query(
             query=query,
-            collection_name="Instinkt"  # Optional, könnte auch mehrere Collections durchsuchen
+            collection_name="Instinktveranlagung"  # Änderung zur präziseren Collection
         )
         
         # Überprüfen auf Fehler

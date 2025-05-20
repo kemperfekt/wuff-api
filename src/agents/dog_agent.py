@@ -8,6 +8,7 @@ from src.services.rag_service import RAGService
 from src.state.session_state import sessions
 from src.config.prompts import DOG_PERSPECTIVE_TEMPLATE, EXERCISE_TEMPLATE
 from src.core.error_handling import with_error_handling, GPTServiceError, RAGServiceError
+from src.services.weaviate_service import query_agent_service
 
 class DogAgent(BaseAgent):
     """Agent, der aus Hundeperspektive antwortet"""
@@ -39,27 +40,36 @@ class DogAgent(BaseAgent):
             return self._get_greeting_messages()
             
         try:
-            # Schritt 1: Symptomprüfung durchführen
-            symptom_info = await self._check_symptom(user_input)
+            # Schritt 1: Verhaltensanalyse mit RAG durchführen
+            symptom_info = await get_symptom_info(user_input)
             
-            if not symptom_info:
-                # Kein bekanntes Verhalten gefunden
-                messages.append(AgentMessage(
-                    sender=self.role,
-                    text="Hm, das klingt für mich nicht nach typischem Hundeverhalten. Magst du es nochmal anders beschreiben?"
-                ))
-                return messages + self._get_greeting_messages()
+            if not symptom_info or "keine spezifischen Informationen" in symptom_info.lower():
+                # Kein bekanntes Verhalten gefunden - versuchen mit Allgemein-Collection
+                general_info = await self._get_general_info(user_input)
+                if general_info:
+                    messages.append(AgentMessage(
+                        sender=self.role,
+                        text=general_info
+                    ))
+                    return messages
+                else:
+                    # Wirklich nichts gefunden
+                    messages.append(AgentMessage(
+                        sender=self.role,
+                        text="Hm, das klingt für mich nicht nach typischem Hundeverhalten. Magst du es nochmal anders beschreiben?"
+                    ))
+                    return messages + self._get_greeting_messages()
             
             # Schritt 2: Umfassende RAG-Analyse durchführen
             context_text = context.get("additional_context", "")
             analysis = await RAGService.get_comprehensive_analysis(user_input, context_text)
             
             # Schritt 3: Hundeperspektive generieren
-            dog_view = await RAGService.generate_dog_perspective(user_input, analysis)
+            dog_view = await self._get_dog_perspective(user_input, analysis)
             messages.append(AgentMessage(sender=self.role, text=dog_view))
             
             # Schritt 4: Übung vorschlagen
-            exercise = analysis.get("exercise", "Keine passende Übung gefunden")
+            exercise = await self._get_exercise_recommendation(user_input, analysis)
             messages.append(AgentMessage(
                 sender=self.role,
                 text=f"Hier ist eine Übung, die zu deinem Fall passt: {exercise}. Gibt es ein weiteres Verhalten, das Du mit mir besprechen möchtest?"
@@ -113,3 +123,68 @@ class DogAgent(BaseAgent):
         # Verwende den Prompt aus der Konfiguration
         prompt = EXERCISE_TEMPLATE.format(symptom=symptom, match=match)
         return await ask_gpt(prompt)
+    
+    async def _get_general_info(self, query: str) -> Optional[str]:
+        """Sucht allgemeine Informationen in der Allgemein-Collection"""
+        try:
+            result = await query_agent_service.query(
+                query=f"Beschreibe als Hund, wie ich dieses Verhalten erlebe: {query}",
+                collection_name="Allgemein"
+            )
+            
+            if "error" in result and result["error"]:
+                return None
+                
+            if "data" in result and result["data"]:
+                if isinstance(result["data"], dict) and "hundeperspektive" in result["data"]:
+                    return result["data"]["hundeperspektive"]
+                elif isinstance(result["data"], str):
+                    return result["data"]
+            
+            return None
+        except Exception as e:
+            print(f"❌ Fehler bei der Allgemein-Suche: {e}")
+            return None
+
+    async def _get_dog_perspective(self, symptom: str, analysis: Dict[str, Any]) -> str:
+        """Holt die Hundeperspektive aus der passenden Collection"""
+        primary_instinct = analysis.get("primary_instinct", "").lower()
+        
+        # Versuche zuerst eine direkte Abfrage aus der Instinkte-Collection
+        try:
+            result = await query_agent_service.query(
+                query=f"Gib mir die Hundeperspektive für den Instinkt '{primary_instinct}' bezogen auf '{symptom}'",
+                collection_name="Instinkte"
+            )
+            
+            if "data" in result and result["data"]:
+                if isinstance(result["data"], dict) and "hundesperspektive" in result["data"]:
+                    return result["data"]["hundesperspektive"]
+        except Exception as e:
+            print(f"❌ Fehler bei der Instinkt-Perspektive-Suche: {e}")
+        
+        # Fallback: RAGService für generierte Perspektive nutzen
+        return await RAGService.generate_dog_perspective(symptom, analysis)
+
+    async def _get_exercise_recommendation(self, symptom: str, analysis: Dict[str, Any]) -> str:
+        """Holt eine passende Übung aus der Erziehung-Collection"""
+        primary_instinct = analysis.get("primary_instinct", "").lower()
+        
+        try:
+            result = await query_agent_service.query(
+                query=f"Welche Erziehungsaufgabe passt am besten zu dem Verhalten '{symptom}' mit Bezug zum {primary_instinct}-Instinkt?",
+                collection_name="Erziehung"
+            )
+            
+            if "data" in result and result["data"]:
+                if isinstance(result["data"], dict) and "anleitung" in result["data"]:
+                    return result["data"]["anleitung"]
+                elif "exercise" in result["data"]:
+                    return result["data"]["exercise"]
+                elif isinstance(result["data"], str):
+                    return result["data"]
+        except Exception as e:
+            print(f"❌ Fehler bei der Übungssuche: {e}")
+        
+        # Fallback
+        return analysis.get("exercise", "Übe mit deinem Hund Impulskontrolle durch kurze, regelmäßige Trainingseinheiten.")
