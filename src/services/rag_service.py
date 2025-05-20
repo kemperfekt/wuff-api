@@ -30,47 +30,99 @@ class RAGService:
     @with_error_handling(RAGServiceError, get_fallback_analysis())
     async def get_comprehensive_analysis(symptom: str, context: str = "") -> Dict[str, Any]:
         """
-        Führt eine umfassende Analyse eines Hundeverhaltens durch mit einer einzigen Abfrage.
-        Kombiniert Instinkt-Identifikation, Beschreibungen und Übungsvorschläge.
+        Führt eine umfassende Analyse eines Hundeverhaltens durch mit dem Query Agent.
         """
-        # Eine präzisere Abfrage für bessere Ergebnisse
+        # Eine präzise Abfrage formulieren
         query = f"""
         Analysiere das folgende Hundeverhalten: '{symptom}'
         
         Identifiziere den wahrscheinlichsten Instinkt (Jagd, Rudel, Territorial, Sexual) 
-        und gib eine Beschreibung aus Hundesicht zu jedem der vier Instinkte im Zusammenhang mit diesem Verhalten.
+        und gib eine Beschreibung zu jedem der vier Instinkte, wie er mit diesem Verhalten zusammenhängen könnte.
         
         Zusätzlicher Kontext: {context}
         
-        Liefere das Ergebnis strukturiert mit folgenden Feldern:
+        Liefere das Ergebnis strukturiert mit:
         - primary_instinct: Der dominanteste Instinkt 
         - primary_description: Beschreibung, warum dieser Instinkt primär ist
-        - all_instincts: Kurzbeschreibungen für jeden der vier Instinkte
+        - all_instincts: Kurzbeschreibungen zu jedem der vier Instinkte
         - exercise: Ein Übungsvorschlag für die Hundehalter
         - confidence: Ein Wert zwischen 0 und 1, der angibt, wie sicher die Analyse ist
         """
         
-        # Instinktveranlagung-Collection für beste Ergebnisse
+        # Abfrage an die Instinktveranlagung-Collection senden
         result = await query_agent_service.query(
             query=query,
-            collection_name="Instinktveranlagung"  # Änderung zur präziseren Collection
+            collection_name="Instinktveranlagung"  # Diese Collection für Instinktanalysen nutzen
         )
         
-        # Überprüfen auf Fehler
+        # Fehlerbehandlung
         if "error" in result and result["error"]:
             print(f"⚠️ Fehler bei der RAG-Analyse: {result['error']}")
             return get_fallback_analysis()
         
-        # Daten aus dem Ergebnis extrahieren
+        # Versuche, strukturierte Daten aus der Antwort zu extrahieren
         if "data" in result and result["data"]:
-            return {
-                "primary_instinct": result["data"].get("primary_instinct", "unbekannter Instinkt"),
-                "primary_description": result["data"].get("primary_description", "Keine Beschreibung verfügbar"),
-                "all_instincts": result["data"].get("all_instincts", {}),
-                "exercise": result["data"].get("exercise", "Keine Übung verfügbar"),
-                "confidence": result["data"].get("confidence", 0.5),
-                "success": True
-            }
+            try:
+                # Wenn das Ergebnis ein String ist, versuche es zu parsen
+                if isinstance(result["data"], str):
+                    # Extrahiere die Informationen aus dem Text
+                    text = result["data"]
+                    
+                    # Einfacher Parser für strukturierten Text
+                    primary_instinct = None
+                    primary_description = None
+                    all_instincts = {}
+                    exercise = None
+                    confidence = 0.5
+                    
+                    lines = text.split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith("primary_instinct:") or line.startswith("- primary_instinct:"):
+                            primary_instinct = line.split(":", 1)[1].strip()
+                        elif line.startswith("primary_description:") or line.startswith("- primary_description:"):
+                            primary_description = line.split(":", 1)[1].strip()
+                        elif line.startswith("exercise:") or line.startswith("- exercise:"):
+                            exercise = line.split(":", 1)[1].strip()
+                        elif line.startswith("confidence:") or line.startswith("- confidence:"):
+                            try:
+                                confidence = float(line.split(":", 1)[1].strip())
+                            except:
+                                pass
+                        elif "jagd" in line.lower():
+                            all_instincts["jagd"] = line.split(":", 1)[1].strip() if ":" in line else line
+                        elif "rudel" in line.lower():
+                            all_instincts["rudel"] = line.split(":", 1)[1].strip() if ":" in line else line
+                        elif "territorial" in line.lower():
+                            all_instincts["territorial"] = line.split(":", 1)[1].strip() if ":" in line else line
+                        elif "sexual" in line.lower():
+                            all_instincts["sexual"] = line.split(":", 1)[1].strip() if ":" in line else line
+                    
+                    return {
+                        "primary_instinct": primary_instinct or "unbekannter Instinkt",
+                        "primary_description": primary_description or "Keine Beschreibung verfügbar",
+                        "all_instincts": all_instincts or {
+                            "jagd": "Der Jagdinstinkt lässt mich Dinge verfolgen und fangen wollen.",
+                            "rudel": "Der Rudelinstinkt regelt mein soziales Verhalten in der Gruppe.",
+                            "territorial": "Der territoriale Instinkt lässt mich mein Gebiet und meine Ressourcen schützen.",
+                            "sexual": "Der Sexualinstinkt steuert mein Fortpflanzungsverhalten."
+                        },
+                        "exercise": exercise or "Übe mit deinem Hund Impulskontrolle durch kurze, regelmäßige Trainingseinheiten.",
+                        "confidence": confidence,
+                        "success": True
+                    }
+                elif isinstance(result["data"], dict):
+                    # Wenn das Ergebnis bereits ein Dict ist
+                    return {
+                        "primary_instinct": result["data"].get("primary_instinct", "unbekannter Instinkt"),
+                        "primary_description": result["data"].get("primary_description", "Keine Beschreibung verfügbar"),
+                        "all_instincts": result["data"].get("all_instincts", {}),
+                        "exercise": result["data"].get("exercise", "Keine Übung verfügbar"),
+                        "confidence": result["data"].get("confidence", 0.5),
+                        "success": True
+                    }
+            except Exception as e:
+                print(f"⚠️ Fehler bei der Verarbeitung der RAG-Antwort: {e}")
         
         return get_fallback_analysis()
     

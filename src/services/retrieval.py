@@ -6,11 +6,16 @@ from src.services.weaviate_service import query_agent_service
 async def get_symptom_info(symptom: str) -> Optional[str]:
     """
     Sucht nach Informationen zu einem Hundeverhalten/Symptom mit dem Weaviate Query Agent.
-    Nutzt gezielt die Symptome-Collection.
+    
+    Args:
+        symptom: Das beschriebene Hundeverhalten
+        
+    Returns:
+        Ein Text mit relevanten Informationen oder None, wenn nichts gefunden wurde
     """
     try:
-        # Direkte Abfrage an die Symptome-Collection
-        query = f"Finde Informationen zu folgendem Hundeverhalten: {symptom}"
+        # Query in natürlicher Sprache an die Symptome-Collection
+        query = f"Beschreibe das folgende Hundeverhalten kurz und präzise: {symptom}"
         
         result = await query_agent_service.query(
             query=query,
@@ -24,17 +29,7 @@ async def get_symptom_info(symptom: str) -> Optional[str]:
         
         # Ergebnis extrahieren
         if "data" in result and result["data"]:
-            # Wenn symptom_name im Ergebnis vorhanden ist, wurde ein passendes Symptom gefunden
-            if isinstance(result["data"], dict) and "symptom_name" in result["data"]:
-                return result["data"]["schnelldiagnose"]
-            # Überprüfe sonstige mögliche Felder
-            for field in ["beschreibung", "text", "content"]:
-                if isinstance(result["data"], dict) and field in result["data"]:
-                    return result["data"][field]
-            
-            # Wenn ein String zurückgegeben wurde
-            if isinstance(result["data"], str):
-                return result["data"]
+            return result["data"]
         
         return None
     except Exception as e:

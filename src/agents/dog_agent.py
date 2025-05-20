@@ -124,67 +124,59 @@ class DogAgent(BaseAgent):
         prompt = EXERCISE_TEMPLATE.format(symptom=symptom, match=match)
         return await ask_gpt(prompt)
     
-    async def _get_general_info(self, query: str) -> Optional[str]:
-        """Sucht allgemeine Informationen in der Allgemein-Collection"""
-        try:
-            result = await query_agent_service.query(
-                query=f"Beschreibe als Hund, wie ich dieses Verhalten erlebe: {query}",
-                collection_name="Allgemein"
-            )
-            
-            if "error" in result and result["error"]:
-                return None
-                
-            if "data" in result and result["data"]:
-                if isinstance(result["data"], dict) and "hundeperspektive" in result["data"]:
-                    return result["data"]["hundeperspektive"]
-                elif isinstance(result["data"], str):
-                    return result["data"]
-            
+async def _get_general_info(self, query: str) -> Optional[str]:
+    """Sucht allgemeine Informationen in der Allgemein-Collection"""
+    try:
+        result = await query_agent_service.query(
+            query=f"Beschreibe als Hund, wie ich folgendes Verhalten erlebe: {query}",
+            collection_name="Allgemein"
+        )
+        
+        if "error" in result and result["error"]:
             return None
-        except Exception as e:
-            print(f"❌ Fehler bei der Allgemein-Suche: {e}")
-            return None
-
-    async def _get_dog_perspective(self, symptom: str, analysis: Dict[str, Any]) -> str:
-        """Holt die Hundeperspektive aus der passenden Collection"""
-        primary_instinct = analysis.get("primary_instinct", "").lower()
-        
-        # Versuche zuerst eine direkte Abfrage aus der Instinkte-Collection
-        try:
-            result = await query_agent_service.query(
-                query=f"Gib mir die Hundeperspektive für den Instinkt '{primary_instinct}' bezogen auf '{symptom}'",
-                collection_name="Instinkte"
-            )
             
-            if "data" in result and result["data"]:
-                if isinstance(result["data"], dict) and "hundesperspektive" in result["data"]:
-                    return result["data"]["hundesperspektive"]
-        except Exception as e:
-            print(f"❌ Fehler bei der Instinkt-Perspektive-Suche: {e}")
+        if "data" in result and result["data"]:
+            return result["data"]
         
-        # Fallback: RAGService für generierte Perspektive nutzen
-        return await RAGService.generate_dog_perspective(symptom, analysis)
+        return None
+    except Exception as e:
+        print(f"❌ Fehler bei der Allgemein-Suche: {e}")
+        return None
 
-    async def _get_exercise_recommendation(self, symptom: str, analysis: Dict[str, Any]) -> str:
-        """Holt eine passende Übung aus der Erziehung-Collection"""
-        primary_instinct = analysis.get("primary_instinct", "").lower()
+async def _get_dog_perspective(self, symptom: str, analysis: Dict[str, Any]) -> str:
+    """Holt die Hundeperspektive aus passenden Collections"""
+    primary_instinct = analysis.get("primary_instinct", "").lower()
+    
+    # Versuche zuerst eine direkte Abfrage nach der Hundeperspektive
+    # Diese Abfrage sucht in allen Collections, die das Feld "hundeperspektive" haben
+    try:
+        result = await query_agent_service.query(
+            query=f"Gib mir die Hundeperspektive für den Instinkt '{primary_instinct}' bezogen auf '{symptom}'. Antworte aus der Sicht des Hundes in Ich-Form.",
+            # Kein collection_name - sucht in allen Collections
+        )
         
-        try:
-            result = await query_agent_service.query(
-                query=f"Welche Erziehungsaufgabe passt am besten zu dem Verhalten '{symptom}' mit Bezug zum {primary_instinct}-Instinkt?",
-                collection_name="Erziehung"
-            )
-            
-            if "data" in result and result["data"]:
-                if isinstance(result["data"], dict) and "anleitung" in result["data"]:
-                    return result["data"]["anleitung"]
-                elif "exercise" in result["data"]:
-                    return result["data"]["exercise"]
-                elif isinstance(result["data"], str):
-                    return result["data"]
-        except Exception as e:
-            print(f"❌ Fehler bei der Übungssuche: {e}")
+        if "data" in result and result["data"]:
+            return result["data"]
+    except Exception as e:
+        print(f"❌ Fehler bei der Perspektive-Suche: {e}")
+    
+    # Fallback: RAGService für generierte Perspektive nutzen
+    return await RAGService.generate_dog_perspective(symptom, analysis)
+
+async def _get_exercise_recommendation(self, symptom: str, analysis: Dict[str, Any]) -> str:
+    """Holt eine passende Übung aus der Erziehung-Collection"""
+    primary_instinct = analysis.get("primary_instinct", "").lower()
+    
+    try:
+        result = await query_agent_service.query(
+            query=f"Welche konkrete Erziehungsaufgabe passt am besten zu dem Hundeverhalten '{symptom}' mit Bezug zum {primary_instinct}-Instinkt? Gib eine klare Anleitung für den Hundehalter.",
+            collection_name="Erziehung"  # Spezifisch in der Erziehung-Collection suchen
+        )
         
-        # Fallback
-        return analysis.get("exercise", "Übe mit deinem Hund Impulskontrolle durch kurze, regelmäßige Trainingseinheiten.")
+        if "data" in result and result["data"]:
+            return result["data"]
+    except Exception as e:
+        print(f"❌ Fehler bei der Übungssuche: {e}")
+    
+    # Fallback
+    return analysis.get("exercise", "Übe mit deinem Hund Impulskontrolle durch kurze, regelmäßige Trainingseinheiten.")
