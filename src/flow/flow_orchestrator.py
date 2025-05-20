@@ -5,6 +5,7 @@ from src.models.flow_models import AgentMessage, FlowStep
 from src.state.session_state import SessionState, SessionStore
 from src.agents.dog_agent import DogAgent
 from src.agents.companion_agent import CompanionAgent
+from src.services.weaviate_service import query_agent_service
 from src.services.gpt_service import validate_user_input
 from src.services.rag_service import RAGService
 from src.config.prompts import DOG_PERSPECTIVE_QUERY_TEMPLATE, INSTINCT_ANALYSIS_QUERY_TEMPLATE, EXERCISE_QUERY_TEMPLATE
@@ -103,39 +104,54 @@ class FlowOrchestrator:
         )]
     
     async def _handle_symptom_input(self, state: SessionState, user_input: str) -> List[AgentMessage]:
-        """Behandelt die Eingabe eines Symptoms - fokussiert auf schnelle Hundeperspektive"""
+        """Behandelt die Eingabe eines Symptoms - präzise Symptom-Suche"""
         if not user_input or len(user_input) < 10:
             return [AgentMessage(
                 sender=self.dog_agent.role,
                 text="Kannst Du das Verhalten bitte etwas ausführlicher beschreiben?"
             )]
         
-        # Verhalten speichern und zur Bestätigung weitergehen
+        # Verhalten speichern
         state.active_symptom = user_input
-        state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
         
         try:
-            # Optimiert: Sucht direkt in der Symptome-Collection nach passendem Verhalten
+            # Präzise Suche in der Symptome-Collection
             result = await query_agent_service.query(
                 query=DOG_PERSPECTIVE_QUERY_TEMPLATE.format(symptom=user_input),
-                collection_name="Symptome"  # Gezielt in Symptome suchen
+                collection_name="Symptome"
             )
             
-            dog_view = "Aus meiner Hundesicht fühlt sich das so an..."
+            # Antwort prüfen
             if "data" in result and result["data"]:
                 dog_view = result["data"]
                 
-            return [AgentMessage(
-                sender=self.dog_agent.role,
-                text=f"{dog_view} Magst Du mehr erfahren, warum ich mich so verhalte?"
-            )]
-                
+                # Prüfen auf das spezielle Signal für "kein Match"
+                if "KEIN_MATCH_GEFUNDEN" in dog_view:
+                    # Zurück zum Anfang - kein Match gefunden
+                    return [AgentMessage(
+                        sender=self.dog_agent.role,
+                        text="Hmm, zu diesem Verhalten habe ich keine spezifischen Informationen. Magst du ein anderes Hundeverhalten beschreiben?"
+                    )]
+                else:
+                    # Match gefunden - mit der Schnelldiagnose fortfahren
+                    state.current_step = FlowStep.WAIT_FOR_CONFIRMATION
+                    return [AgentMessage(
+                        sender=self.dog_agent.role,
+                        text=f"{dog_view} Magst Du mehr erfahren, warum ich mich so verhalte?"
+                    )]
+            else:
+                # Keine Daten in der Antwort
+                return [AgentMessage(
+                    sender=self.dog_agent.role,
+                    text="Ich konnte dieses Verhalten nicht einordnen. Magst du es anders beschreiben oder ein anderes Verhalten nennen?"
+                )]
+        
         except Exception as e:
             print(f"❌ Fehler bei der Symptomanalyse: {e}")
             return [AgentMessage(
                 sender=self.dog_agent.role,
-                text="Als Hund spüre ich verschiedene Impulse bei diesem Verhalten. Magst Du mehr erfahren, warum ich mich so verhalte?"
-            )]    
+                text="Entschuldige, ich hatte Schwierigkeiten, deine Anfrage zu verstehen. Magst du es noch einmal versuchen?"
+            )]
         
     async def _handle_confirmation(self, state: SessionState, user_input: str) -> List[AgentMessage]:
         """Behandelt die Bestätigung des Nutzers, mehr zu erfahren"""

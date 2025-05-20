@@ -57,14 +57,12 @@ der folgendes Verhalten zeigt: {symptom}
 
 # Weaviate Query Agent Templates
 DOG_PERSPECTIVE_QUERY_TEMPLATE = """
-Gibt es in der Collection ein passendes Symptom zu folgendem Verhalten?
+Suche in der Symptome-Collection nach einem exakten Match für dieses Verhalten:
 '{symptom}'
 
-Falls ja, gib die schnelldiagnose aus der hundeperspektive wieder.
-Falls nein, beschreibe knapp und emotional aus Hundesicht, wie ich das Verhalten erlebe.
+Falls ein Match gefunden: Gib NUR die "schnelldiagnose" aus der Hundeperspektive wieder. Nichts hinzufügen oder ändern.
 
-Antworte immer in der Ich-Form aus Sicht des Hundes.
-Vermeide Fachbegriffe und Training oder Mensch-bezogene Themen.
+Falls kein Match gefunden: Antworte nur mit "Zu diesem Verhalten habe ich leider noch keine Antwort." - keine eigene Beschreibung generieren.
 """
 
 INSTINCT_ANALYSIS_QUERY_TEMPLATE = """
