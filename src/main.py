@@ -20,6 +20,7 @@ app.add_middleware(
     allow_origins=[
         "https://app.wuffchat.de",
         "https://api.wuffchat.de",
+        "https://dogbot-agent.osc-fr1.scalingo.io"
         "http://localhost:3000",
         "http://127.0.0.1:3000"
     ],
