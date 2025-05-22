@@ -43,7 +43,7 @@ class MessageRequest(BaseModel):
     session_id: str
     message: str
 
-    @app.get("/")
+@app.get("/")
 def read_root():
     logger.info(">>> HEALTHCHECK SUCCESS")
     return {"status": "ok"}
