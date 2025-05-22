@@ -49,7 +49,7 @@ def read_root():
     logger.info(">>> HEALTHCHECK SUCCESS")
     return {"status": "ok"}
 
-@app.get("/healthz")
+@app.get("/health")
 def healthcheck():
     return {"status": "ok"}
 
