@@ -56,10 +56,6 @@ def validate_required_settings():
     
     return True
 
-# Beim Import prüfen
-if not validate_required_settings():
-    print("Überprüfe deine .zshrc oder setze die Umgebungsvariablen manuell.")
-
 # Logging-Funktionen
 def setup_logging():
     """Konfiguriert das Logging-System"""
