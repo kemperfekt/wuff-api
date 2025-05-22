@@ -48,6 +48,10 @@ def read_root():
     logger.info(">>> HEALTHCHECK SUCCESS")
     return {"status": "ok"}
 
+@app.get("/healthz")
+def healthcheck():
+    return {"status": "ok"}
+
 @app.post("/flow_intro", response_model=IntroResponse)
 async def flow_intro():
     session = session_store.create_session()
