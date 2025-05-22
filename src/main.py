@@ -43,9 +43,9 @@ class MessageRequest(BaseModel):
     session_id: str
     message: str
 
-@app.get("/")
+    @app.get("/")
 def read_root():
-    logger.info("API-Aufruf: root endpoint")
+    logger.info(">>> HEALTHCHECK SUCCESS")
     return {"status": "ok"}
 
 @app.post("/flow_intro", response_model=IntroResponse)
