@@ -2,9 +2,14 @@
 import json
 from typing import Dict, Any, Optional, List
 from src.services.weaviate_service import query_agent_service
-from src.config.prompts import COMBINED_INSTINCT_QUERY_TEMPLATE
 from src.services.gpt_service import ask_gpt
 from src.core.error_handling import with_error_handling, RAGServiceError, GPTServiceError
+
+# ✨ NEUE IMPORTS für PromptManager
+from src.core.prompt_manager import get_prompt_manager, PromptType
+
+# ❌ DIESER IMPORT KANN ENTFERNT WERDEN:
+# from src.config.prompts import COMBINED_INSTINCT_QUERY_TEMPLATE
 
 # Einfaches In-Memory-Cache für schnellere Antworten
 _analysis_cache = {}
@@ -45,22 +50,14 @@ class RAGService:
             print("✅ Lade Analyse aus Cache")
             return _analysis_cache[cache_key]
             
-        # Eine präzisere Abfrage für bessere Ergebnisse
-        query = f"""
-        Analysiere das folgende Hundeverhalten: '{symptom}'
-        
-        Identifiziere den wahrscheinlichsten Instinkt (Jagd, Rudel, Territorial, Sexual) 
-        und gib eine Beschreibung aus Hundesicht zu jedem der vier Instinkte im Zusammenhang mit diesem Verhalten.
-        
-        Zusätzlicher Kontext: {context}
-        
-        Liefere das Ergebnis strukturiert mit folgenden Feldern:
-        - primary_instinct: Der dominanteste Instinkt 
-        - primary_description: Beschreibung, warum dieser Instinkt primär ist
-        - all_instincts: Kurzbeschreibungen für jeden der vier Instinkte
-        - exercise: Ein Übungsvorschlag für die Hundehalter
-        - confidence: Ein Wert zwischen 0 und 1, der angibt, wie sicher die Analyse ist
-        """
+        # ✅ VORHER: Direkter Query-String im Code
+        # ✨ NACHHER: PromptManager verwenden
+        prompt_manager = get_prompt_manager()
+        query = prompt_manager.get_prompt(
+            PromptType.COMBINED_INSTINCT,
+            symptom=symptom,
+            context=context
+        )
         
         # Instinktveranlagung-Collection für beste Ergebnisse
         result = await query_agent_service.query(
