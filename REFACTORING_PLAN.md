@@ -106,11 +106,11 @@ src/
 - [x] **COMMIT**: "feat: Extract all prompts to centralized v2 structure"
 
 ### Phase 3: Service Layer Refactoring 🚧
-- [ ] Create core services only (skip RAG, retrieval, session_logger):
-  - [ ] `v2/services/gpt_service.py` - Async-only OpenAI wrapper
+- Create core services only (skip RAG, retrieval, session_logger):
+  - [☑️] `v2/services/gpt_service.py` - Async-only OpenAI wrapper (incl. test & demo)
   - [ ] `v2/services/weaviate_service.py` - Unified vector operations
   - [ ] `v2/services/redis_service.py` - Consistent caching/storage
-- [ ] Each service must:
+- Each service must:
   - [ ] Inherit from BaseService
   - [ ] Use async methods only
   - [ ] Implement health_check method
@@ -176,6 +176,24 @@ src/
 - **RAG Service**: Will be split - retrieval goes to WeaviateService, generation to agents
 - **Testing**: Mock-first approach with optional integration tests
 - **No Backwards Compatibility**: V2 is a fresh start with new interfaces
+
+## Recent Notes (Phase 3)
+# Create test directories for V2 services
+mkdir -p tests/v2/services
+touch tests/v2/services/__init__.py
+
+# Create the service directory
+mkdir -p src/v2/services
+touch src/v2/services/__init__.py
+
+# To run the tests (after creating all files):
+python -m pytest tests/v2/services/test_gpt_service.py -v
+
+# To run only unit tests (skip integration):
+python -m pytest tests/v2/services/test_gpt_service.py -v -m "not integration"
+
+# To see the demo:
+python -m src.v2.services.demo_gpt_service
 
 ## Code Examples for Reference
 
@@ -255,7 +273,7 @@ RUN_INTEGRATION_TESTS=false
 ```
 
 ## Success Metrics
-- [x] All prompts in one location
+- [☑️] All prompts in one location
 - [ ] All existing flows work identically
 - [ ] Response time ≤ current implementation
 - [ ] Error rate < 1%
@@ -286,7 +304,7 @@ RUN_INTEGRATION_TESTS=false
 - Starting Phase 3: Service Layer Refactoring
 - Clarified service scope (GPT, Weaviate, Redis only)
 - Decided on mock-first testing approach
-- Next: Implement GPTService
+- Implemented GPTService incl. test & demo
 
 ---
 **Remember to update and commit this file after each significant step!**
