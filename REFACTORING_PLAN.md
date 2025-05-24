@@ -76,14 +76,14 @@ src/
 ## Implementation Phases
 
 ### Phase 1: Core Infrastructure
-- [ ] Create v2 folder structure
-- [ ] Implement base classes:
-  - [ ] `v2/core/flow_engine.py` - FSM implementation
-  - [ ] `v2/core/prompt_manager.py` - Prompt management
-  - [ ] `v2/core/service_base.py` - Service base class
-  - [ ] `v2/core/exceptions.py` - Clean exception hierarchy
-- [ ] Write unit tests for FSM engine
-- [ ] **COMMIT**: "feat: Add V2 core infrastructure with FSM engine"
+- [☑️] Create v2 folder structure
+- [☑️] Implement base classes:
+  - [☑️] `v2/core/flow_engine.py` - FSM implementation
+  - [☑️] `v2/core/prompt_manager.py` - Prompt management
+  - [☑️] `v2/core/service_base.py` - Service base class
+  - [☑️] `v2/core/exceptions.py` - Clean exception hierarchy
+- [☑️] Write unit tests for FSM engine
+- [☑️] **COMMIT**: "feat: Add V2 core infrastructure with FSM engine"
 
 ### Phase 2: Prompt Extraction
 - [ ] Create prompt structure:
