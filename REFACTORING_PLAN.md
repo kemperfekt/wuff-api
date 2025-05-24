@@ -1,10 +1,10 @@
 # WuffChat V2 Refactoring Plan
 
 ## Project Overview
-- **Start Date**: [INSERT DATE]
+- **Start Date**: May 24, 2025
 - **Current Branch**: refactor/v2-architecture
-- **Last Updated**: [INSERT DATE]
-- **Last Completed Step**: [INSERT STEP]
+- **Last Updated**: May 24, 2025
+- **Last Completed Step**: Phase 2 - Prompt Extraction
 
 ## Context for New Chat Sessions
 ```
@@ -15,9 +15,9 @@ All details in this document. Continue from "Current Status".
 ```
 
 ## Architecture Problems Identified
-- [ ] FSM defined but not used (state_machine.py is orphaned)
-- [ ] Flow logic hardcoded in flow_orchestrator.py (500+ lines)
-- [ ] Prompts scattered across 5+ files
+- [x] FSM defined but not used (state_machine.py is orphaned)
+- [x] Flow logic hardcoded in flow_orchestrator.py (500+ lines)
+- [x] Prompts scattered across 5+ files
 - [ ] Mixed async/sync patterns
 - [ ] Inconsistent service patterns (singleton vs static vs instance)
 - [ ] Agents doing too much (business logic + formatting)
@@ -62,11 +62,11 @@ src/
 │   │   └── redis_service.py    # Consistent Redis pattern
 │   ├── prompts/
 │   │   ├── __init__.py
-│   │   ├── prompt_manager.py   # PromptManager class
 │   │   ├── dog_prompts.py      # All dog agent prompts
 │   │   ├── companion_prompts.py # All companion prompts
 │   │   ├── query_prompts.py    # Weaviate/RAG queries
 │   │   ├── validation_prompts.py # Input validation
+│   │   ├── generation_prompts.py # GPT generation templates
 │   │   └── common_prompts.py   # Shared prompts
 │   └── models/
 │       ├── __init__.py
@@ -75,40 +75,49 @@ src/
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure
-- [☑️] Create v2 folder structure
-- [☑️] Implement base classes:
-  - [☑️] `v2/core/flow_engine.py` - FSM implementation
-  - [☑️] `v2/core/prompt_manager.py` - Prompt management
-  - [☑️] `v2/core/service_base.py` - Service base class
-  - [☑️] `v2/core/exceptions.py` - Clean exception hierarchy
-- [☑️] Write unit tests for FSM engine
-- [☑️] **COMMIT**: "feat: Add V2 core infrastructure with FSM engine"
+### Phase 1: Core Infrastructure ✅
+- [x] Create v2 folder structure
+- [x] Implement base classes:
+  - [x] `v2/core/flow_engine.py` - FSM implementation
+  - [x] `v2/core/prompt_manager.py` - Prompt management
+  - [x] `v2/core/service_base.py` - Service base class
+  - [x] `v2/core/exceptions.py` - Clean exception hierarchy
+- [x] Write unit tests for FSM engine
+- [x] **COMMIT**: "feat: Add V2 core infrastructure with FSM engine"
 
-### Phase 2: Prompt Extraction
-- [☑️] Create prompt structure:
-  - [☑️] `v2/prompts/prompt_manager.py`
-  - [☑️] `v2/prompts/dog_prompts.py`
-  - [☑️] `v2/prompts/companion_prompts.py`
-  - [☑️] `v2/prompts/query_prompts.py`
-  - [☑️] `v2/prompts/validation_prompts.py`
-- [ ] Extract all prompts from:
-  - [☑️] `src/config/prompts.py`
-  - [☑️] `src/services/gpt_service.py`
-  - [☑️] `src/flow/flow_orchestrator.py`
-  - [☑️] `src/services/rag_service.py`
-  - [☑️] `src/agents/dog_agent.py`
-- [☑️] Create prompt access interface
-- [ ] **COMMIT**: "feat: Extract all prompts to centralized v2 structure"
+### Phase 2: Prompt Extraction ✅
+- [x] Create prompt structure:
+  - [x] `v2/prompts/__init__.py`
+  - [x] `v2/prompts/dog_prompts.py`
+  - [x] `v2/prompts/companion_prompts.py`
+  - [x] `v2/prompts/query_prompts.py`
+  - [x] `v2/prompts/validation_prompts.py`
+  - [x] `v2/prompts/generation_prompts.py`
+  - [x] `v2/prompts/common_prompts.py`
+- [x] Extract all prompts from:
+  - [x] `src/config/prompts.py`
+  - [x] `src/services/gpt_service.py`
+  - [x] `src/flow/flow_orchestrator.py`
+  - [x] `src/services/rag_service.py`
+  - [x] `src/agents/dog_agent.py`
+- [x] Create prompt access interface
+- [x] Update PromptManager to load from files
+- [x] Create test and migration tools
+- [x] **COMMIT**: "feat: Extract all prompts to centralized v2 structure"
 
-### Phase 3: Service Layer Refactoring
-- [ ] Standardize all services to async:
-  - [ ] `v2/services/gpt_service.py`
-  - [ ] `v2/services/weaviate_service.py`
-  - [ ] `v2/services/redis_service.py`
-- [ ] Implement consistent initialization pattern
-- [ ] Remove embedded prompts
-- [ ] Add proper error handling
+### Phase 3: Service Layer Refactoring 🚧
+- [ ] Create core services only (skip RAG, retrieval, session_logger):
+  - [ ] `v2/services/gpt_service.py` - Async-only OpenAI wrapper
+  - [ ] `v2/services/weaviate_service.py` - Unified vector operations
+  - [ ] `v2/services/redis_service.py` - Consistent caching/storage
+- [ ] Each service must:
+  - [ ] Inherit from BaseService
+  - [ ] Use async methods only
+  - [ ] Implement health_check method
+  - [ ] Use V2 exception hierarchy
+  - [ ] Accept prompts as parameters (no embedded prompts)
+- [ ] Create mock-first unit tests for each service
+- [ ] Create integration test suite (separate, optional)
 - [ ] **COMMIT**: "feat: Implement clean v2 service layer"
 
 ### Phase 4: Agent Refactoring
@@ -118,6 +127,7 @@ src/
   - [ ] `v2/agents/companion_agent.py`
 - [ ] Remove business logic from agents
 - [ ] Use PromptManager for all content
+- [ ] Agents only handle message formatting and response structure
 - [ ] **COMMIT**: "feat: Implement v2 agents with clean separation"
 
 ### Phase 5: Flow Engine Implementation
@@ -153,12 +163,19 @@ src/
 - [ ] Remove v1 code
 - [ ] Move v2 to root
 - [ ] Update documentation
+- [ ] Archive old implementation
 - [ ] **COMMIT**: "refactor: Complete migration to v2"
 
 ## Current Status
-**Currently Working On**: Finished Phase 2, ready for Phase 3
-**Next Step**: Standardize service layer to async
-**Blockers**: Claude Limit
+**Currently Working On**: Phase 3 - Service Layer Refactoring
+**Next Step**: Create v2/services/gpt_service.py with async-only methods
+**Blockers**: None
+
+## Recent Decisions (Phase 3)
+- **Service Scope**: Focus on core 3 services only (GPT, Weaviate, Redis)
+- **RAG Service**: Will be split - retrieval goes to WeaviateService, generation to agents
+- **Testing**: Mock-first approach with optional integration tests
+- **No Backwards Compatibility**: V2 is a fresh start with new interfaces
 
 ## Code Examples for Reference
 
@@ -196,26 +213,26 @@ class DogAgent(BaseAgent):
 
 ### Service Pattern
 ```python
-# v2/services/base_service.py
-class BaseService:
-    def __init__(self, config: Optional[Dict] = None):
-        self.config = config or {}
-        self._client = None
+# v2/services/gpt_service.py
+class GPTService(BaseService):
+    def __init__(self, config: Optional[GPTConfig] = None):
+        super().__init__(config)
+        
+    async def _initialize_client(self):
+        """Initialize OpenAI client"""
+        return AsyncOpenAI(api_key=self.config.api_key)
     
-    async def initialize(self):
-        """Lazy initialization"""
-        pass
-    
-    async def health_check(self) -> bool:
-        """Check if service is healthy"""
-        pass
+    async def complete(self, prompt: str, **kwargs) -> str:
+        """Generate completion from prompt"""
+        await self.ensure_initialized()
+        # Implementation here
 ```
 
 ## Testing Strategy
-- Unit tests for each component
-- Integration tests for flow paths
-- Comparison tests between v1 and v2
-- Performance benchmarks
+- **Unit Tests**: Mock all external dependencies
+- **Integration Tests**: Separate test suite with real API calls (optional)
+- **Mock Strategy**: Use pytest fixtures for consistent mocking
+- **Coverage Goal**: 80%+ for v2 code
 
 ## Rollback Plan
 ```bash
@@ -232,31 +249,44 @@ USE_V2_FLOW=false
 USE_V2_PROMPTS=false
 USE_V2_SERVICES=false
 V2_LOG_LEVEL=DEBUG
+
+# Test Configuration
+RUN_INTEGRATION_TESTS=false
 ```
 
 ## Success Metrics
+- [x] All prompts in one location
 - [ ] All existing flows work identically
 - [ ] Response time ≤ current implementation
 - [ ] Error rate < 1%
 - [ ] Code coverage > 80%
-- [ ] All prompts in one location
 
 ## Notes & Decisions
 - **Why Hybrid Approach**: Safer than full rewrite, allows gradual migration
 - **Why FSM**: Current hardcoded flow is brittle and hard to modify
 - **Why Async Services**: Consistency and better performance
 - **Why Prompt Centralization**: Easy fine-tuning and A/B testing
+- **Why Mock-First Testing**: Faster tests, no API costs, deterministic results
 
 ## Session Log
 <!-- Update this after each work session -->
-### Session 1 - [MAY 24 2025]
+### Session 1 - May 24, 2025
 - Analyzed architecture
 - Identified issues
 - Created refactoring plan
-- Next: Create v2 folder structure
+- Completed Phase 1: Core Infrastructure
 
-### Session 2 - [MAY 24 2025]
-- Phase 2 - see above
+### Session 2 - May 24, 2025
+- Completed Phase 2: Prompt Extraction
+- Extracted 60+ prompts into organized files
+- Created test and migration tools
+- Decided on Phase 3 approach: focus on core services only
+
+### Session 3 - May 24, 2025
+- Starting Phase 3: Service Layer Refactoring
+- Clarified service scope (GPT, Weaviate, Redis only)
+- Decided on mock-first testing approach
+- Next: Implement GPTService
 
 ---
 **Remember to update and commit this file after each significant step!**
