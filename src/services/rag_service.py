@@ -6,7 +6,7 @@ from src.services.gpt_service import ask_gpt
 from src.core.error_handling import with_error_handling, RAGServiceError, GPTServiceError
 
 # ✨ NEUE IMPORTS für PromptManager
-from src.core.prompt_manager import get_prompt_manager, PromptType
+#from src.core.prompt_manager import get_prompt_manager, PromptType
 
 # ❌ DIESER IMPORT KANN ENTFERNT WERDEN:
 # from src.config.prompts import COMBINED_INSTINCT_QUERY_TEMPLATE

@@ -86,19 +86,19 @@ src/
 - [☑️] **COMMIT**: "feat: Add V2 core infrastructure with FSM engine"
 
 ### Phase 2: Prompt Extraction
-- [ ] Create prompt structure:
-  - [ ] `v2/prompts/prompt_manager.py`
-  - [ ] `v2/prompts/dog_prompts.py`
-  - [ ] `v2/prompts/companion_prompts.py`
-  - [ ] `v2/prompts/query_prompts.py`
-  - [ ] `v2/prompts/validation_prompts.py`
+- [☑️] Create prompt structure:
+  - [☑️] `v2/prompts/prompt_manager.py`
+  - [☑️] `v2/prompts/dog_prompts.py`
+  - [☑️] `v2/prompts/companion_prompts.py`
+  - [☑️] `v2/prompts/query_prompts.py`
+  - [☑️] `v2/prompts/validation_prompts.py`
 - [ ] Extract all prompts from:
-  - [ ] `src/config/prompts.py`
-  - [ ] `src/services/gpt_service.py`
-  - [ ] `src/flow/flow_orchestrator.py`
-  - [ ] `src/services/rag_service.py`
-  - [ ] `src/agents/dog_agent.py`
-- [ ] Create prompt access interface
+  - [☑️] `src/config/prompts.py`
+  - [☑️] `src/services/gpt_service.py`
+  - [☑️] `src/flow/flow_orchestrator.py`
+  - [☑️] `src/services/rag_service.py`
+  - [☑️] `src/agents/dog_agent.py`
+- [☑️] Create prompt access interface
 - [ ] **COMMIT**: "feat: Extract all prompts to centralized v2 structure"
 
 ### Phase 3: Service Layer Refactoring

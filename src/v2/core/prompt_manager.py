@@ -127,148 +127,106 @@ class PromptManager:
         logger.info(f"Loaded {len(self.prompts)} prompts")
     
     def _define_prompts(self):
-        """Define all prompts (temporary - will be moved to files)"""
+        """Load all prompts from the prompt files"""
+        # Import all prompt modules
+        from src.v2.prompts import (
+            dog_prompts,
+            generation_prompts,
+            query_prompts,
+            companion_prompts,
+            validation_prompts,
+            common_prompts
+        )
         
-        # Dog agent prompts
+        # Helper to register prompts from module attributes
+        def register_from_module(module, category: PromptCategory, key_prefix: str):
+            """Register all string constants from a module as prompts"""
+            for name in dir(module):
+                value = getattr(module, name)
+                # Only process string constants (uppercase names)
+                if isinstance(value, str) and name.isupper() and not name.startswith('_'):
+                    # Convert CONSTANT_NAME to constant.name format
+                    key_parts = name.lower().split('_')
+                    key = f"{key_prefix}.{'.'.join(key_parts)}"
+                    
+                    self.add_prompt(Prompt(
+                        key=key,
+                        template=value,
+                        category=category,
+                        description=f"Auto-imported from {module.__name__}.{name}"
+                    ))
+        
+        # Register all prompts from each module
+        register_from_module(dog_prompts, PromptCategory.DOG, "dog")
+        register_from_module(companion_prompts, PromptCategory.COMPANION, "companion")
+        register_from_module(validation_prompts, PromptCategory.VALIDATION, "validation")
+        register_from_module(common_prompts, PromptCategory.COMMON, "common")
+        
+        # Special handling for templates that need specific keys
+        
+        # Generation prompts (these keep their template suffix)
         self.add_prompt(Prompt(
-            key="dog.greeting",
-            template="Hallo! Schön, dass Du da bist. Ich erkläre Dir Hundeverhalten aus der Hundeperspektive. Bitte beschreibe ein Verhalten oder eine Situation!",
+            key="generation.dog_perspective",
+            template=generation_prompts.DOG_PERSPECTIVE_TEMPLATE,
             category=PromptCategory.DOG,
-            description="Initial greeting from dog agent"
+            variables=["symptom", "match"]
         ))
         
         self.add_prompt(Prompt(
-            key="dog.perspective",
-            template="""Ich bin ein Hund und habe dieses Verhalten gezeigt:
-'{symptom}'
-
-Hier ist eine Beschreibung aus ähnlichen Situationen:
-{match}
-
-Du bist ein Hund. Beschreibe ruhig und klar, wie du dieses Verhalten aus deiner Sicht erlebt hast. 
-Sprich nicht über Menschen oder Trainingsmethoden. Nenne keine Instinkte beim Namen. Keine Fantasie. Keine Fachbegriffe.""",
+            key="generation.instinct_diagnosis",
+            template=generation_prompts.INSTINCT_DIAGNOSIS_TEMPLATE,
             category=PromptCategory.DOG,
-            description="Dog perspective on behavior"
+            variables=["symptom", "jagd", "rudel", "territorial", "sexual"]
         ))
         
         self.add_prompt(Prompt(
-            key="dog.ask_for_more",
-            template="Magst Du mehr erfahren, warum ich mich so verhalte?",
+            key="generation.exercise",
+            template=generation_prompts.EXERCISE_TEMPLATE,
             category=PromptCategory.DOG,
-            description="Ask if user wants more information"
-        ))
-        
-        self.add_prompt(Prompt(
-            key="dog.ask_for_context", 
-            template="Gut, dann brauche ich ein bisschen mehr Informationen. Bitte beschreibe, wie es zu der Situation kam, wer dabei war und was sonst noch wichtig sein könnte.",
-            category=PromptCategory.DOG,
-            description="Ask for additional context"
-        ))
-        
-        self.add_prompt(Prompt(
-            key="dog.need_more_info",
-            template="Kannst Du das Verhalten bitte etwas ausführlicher beschreiben?",
-            category=PromptCategory.DOG,
-            description="Request more detailed description"
-        ))
-        
-        self.add_prompt(Prompt(
-            key="dog.instinct_diagnosis",
-            template="""Ich bin ein Hund und habe folgendes Verhalten gezeigt:
-{symptom}
-
-Mein Inneres erinnert sich an vier verschiedene Möglichkeiten, wie ich mich in so einer Situation fühlen könnte:
-
-Jagd: {jagd}
-Rudel: {rudel}
-Territorial: {territorial}
-Sexual: {sexual}
-
-Du bist ich – ein Hund. Erkläre dem Menschen, welcher dieser Impulse dich am besten beschreibt und warum. 
-Vermeide Fachbegriffe, bleib bei deinem Gefühl. Keine Instinktnamen nennen. Sprich nicht über Menschen oder Training.""",
-            category=PromptCategory.DOG,
-            description="Instinct-based diagnosis"
-        ))
-        
-        # Companion agent prompts
-        self.add_prompt(Prompt(
-            key="companion.feedback_intro",
-            template="Ich würde mich freuen, wenn du mir noch ein kurzes Feedback gibst.",
-            category=PromptCategory.COMPANION,
-            description="Feedback introduction"
-        ))
-        
-        self.add_prompt(Prompt(
-            key="companion.feedback_q1",
-            template="Hast Du das Gefühl, dass Dir die Beratung bei Deinem Anliegen weitergeholfen hat?",
-            category=PromptCategory.COMPANION
-        ))
-        
-        self.add_prompt(Prompt(
-            key="companion.feedback_q2",
-            template="Wie fandest Du die Sichtweise des Hundes – was hat Dir daran gefallen oder vielleicht irritiert?",
-            category=PromptCategory.COMPANION
-        ))
-        
-        self.add_prompt(Prompt(
-            key="companion.feedback_q3",
-            template="Was denkst Du über die vorgeschlagene Übung – passt sie zu Deiner Situation?",
-            category=PromptCategory.COMPANION
-        ))
-        
-        self.add_prompt(Prompt(
-            key="companion.feedback_q4",
-            template="Auf einer Skala von 0-10: Wie wahrscheinlich ist es, dass Du Wuffchat weiterempfiehlst?",
-            category=PromptCategory.COMPANION
-        ))
-        
-        self.add_prompt(Prompt(
-            key="companion.feedback_q5",
-            template="Optional: Deine E-Mail oder Telefonnummer für eventuelle Rückfragen. Diese wird ausschließlich für Rückfragen zu deinem Feedback verwendet und nach 3 Monaten automatisch gelöscht.",
-            category=PromptCategory.COMPANION
+            variables=["symptom", "match"]
         ))
         
         # Query prompts
         self.add_prompt(Prompt(
-            key="query.symptom_search",
-            template="Beschreibe das folgende Hundeverhalten: {symptom}",
-            category=PromptCategory.QUERY
+            key="query.symptom",
+            template=query_prompts.SYMPTOM_QUERY_TEMPLATE,
+            category=PromptCategory.QUERY,
+            variables=["symptom"]
         ))
         
         self.add_prompt(Prompt(
-            key="query.instinct_search",
-            template="Beschreibe den folgenden Hundeinstinkt: {instinct}",
-            category=PromptCategory.QUERY
+            key="query.instinct",
+            template=query_prompts.INSTINCT_QUERY_TEMPLATE,
+            category=PromptCategory.QUERY,
+            variables=["instinct"]
         ))
         
         self.add_prompt(Prompt(
-            key="query.exercise_search",
-            template="""Finde eine passende Übung für einen Hund mit aktivem {instinct}-Instinkt, 
-der folgendes Verhalten zeigt: {symptom}""",
-            category=PromptCategory.QUERY
-        ))
-        
-        # Validation prompts
-        self.add_prompt(Prompt(
-            key="validation.is_dog_related",
-            template="""Antworte mit 'ja' oder 'nein'. 
-Hat die folgende Eingabe mit Hundeverhalten oder Hundetraining zu tun?
-
-{text}""",
-            category=PromptCategory.VALIDATION
-        ))
-        
-        # Error prompts
-        self.add_prompt(Prompt(
-            key="error.technical_issue",
-            template="Entschuldige, es ist ein technisches Problem aufgetreten. Lass uns neu starten.",
-            category=PromptCategory.ERROR
+            key="query.exercise",
+            template=query_prompts.EXERCISE_QUERY_TEMPLATE,
+            category=PromptCategory.QUERY,
+            variables=["instinct", "symptom"]
         ))
         
         self.add_prompt(Prompt(
-            key="error.not_understood",
-            template="Hmm, das habe ich nicht verstanden. Kannst du es anders formulieren?",
-            category=PromptCategory.ERROR
+            key="query.dog_perspective",
+            template=query_prompts.DOG_PERSPECTIVE_QUERY_TEMPLATE,
+            category=PromptCategory.QUERY,
+            variables=["symptom"]
+        ))
+        
+        self.add_prompt(Prompt(
+            key="query.instinct_analysis",
+            template=query_prompts.INSTINCT_ANALYSIS_QUERY_TEMPLATE,
+            category=PromptCategory.QUERY,
+            variables=["symptom", "context"]
+        ))
+        
+        self.add_prompt(Prompt(
+            key="query.combined_instinct",
+            template=query_prompts.COMBINED_INSTINCT_QUERY_TEMPLATE,
+            category=PromptCategory.QUERY,
+            variables=["symptom", "context"]
         ))
     
     def add_prompt(self, prompt: Prompt):
