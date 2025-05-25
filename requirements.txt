@@ -5,6 +5,7 @@ pydantic
 pydantic-settings   
 python-dotenv
 pytest
+pytest-asyncio
 pytest-cov
 redis
 requests

@@ -65,8 +65,12 @@ class CompanionAgent(BaseAgent):
             V2AgentError: If message generation fails
             V2ValidationError: If context is invalid
         """
-        # Validate context
-        self.validate_context(context)
+        # Validate context - but catch validation errors and handle gracefully
+        try:
+            self.validate_context(context)
+        except V2ValidationError as e:
+            # Return error message instead of raising exception
+            return [self.create_error_message(str(e))]
         
         try:
             # Route to appropriate message handler based on message type
@@ -288,7 +292,12 @@ class CompanionAgent(BaseAgent):
         Returns:
             True if valid, False otherwise
         """
+        # Handle non-integer types
+        if not isinstance(question_number, int):
+            return False
+        
         return 1 <= question_number <= self._feedback_question_count
+        
     
     def _validate_context_impl(self, context: AgentContext) -> None:
         """

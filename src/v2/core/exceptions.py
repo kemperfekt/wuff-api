@@ -204,3 +204,46 @@ class ErrorHandler:
             error.error_code,
             "Es ist ein unerwarteter Fehler aufgetreten. Bitte versuche es später noch einmal."
         )
+    
+# === V2 Agent Compatibility Classes ===
+# These provide the exact interface that V2 agents expect
+
+class V2BaseError(Exception):
+    """Base exception for V2 agent operations"""
+    
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message)
+        self.message = message
+        self.details = details or {}
+
+
+class V2ValidationError(V2BaseError):
+    """V2 validation errors with simple interface"""
+    
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, details)
+
+
+class V2AgentError(V2BaseError):
+    """V2 agent operation errors"""
+    
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, details)
+
+
+class V2FlowError(V2BaseError):
+    """V2 flow engine errors"""
+    
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, details)
+
+
+class V2ServiceError(V2BaseError):
+    """V2 service errors"""
+    
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, details)
+
+
+# Aliases for backwards compatibility
+V2BaseError = V2BaseError  # Self-reference for consistency

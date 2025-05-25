@@ -31,6 +31,46 @@ class PromptCategory(str, Enum):
     ERROR = "error"
     COMMON = "common"
 
+class PromptType(str, Enum):
+    """Enum for all prompt types - maps to prompt keys"""
+    
+    # Dog Agent Prompts
+    DOG_GREETING = "dog.greeting"
+    DOG_GREETING_FOLLOWUP = "dog.greeting.followup"
+    DOG_PERSPECTIVE = "generation.dog_perspective"
+    DOG_INSTINCT_PERSPECTIVE = "dog.instinct.perspective"
+    DOG_DIAGNOSIS = "dog.diagnosis"
+    DOG_CONFIRMATION_QUESTION = "dog.confirmation.question"
+    DOG_CONTEXT_QUESTION = "dog.context.question"
+    DOG_EXERCISE_QUESTION = "dog.exercise.question"
+    DOG_RESTART_QUESTION = "dog.restart.question"
+    DOG_NO_MATCH_ERROR = "dog.no.match.error"
+    DOG_INVALID_INPUT_ERROR = "dog.invalid.input.error"
+    DOG_TECHNICAL_ERROR = "dog.technical.error"
+    DOG_DESCRIBE_MORE = "dog.describe.more"
+    DOG_BE_SPECIFIC = "dog.be.specific"
+    DOG_ANOTHER_BEHAVIOR_QUESTION = "dog.another.behavior.question"
+    DOG_FALLBACK_EXERCISE = "dog.fallback.exercise"
+    
+    # Companion Agent Prompts
+    COMPANION_FEEDBACK_INTRO = "companion.feedback.intro"
+    COMPANION_FEEDBACK_Q1 = "companion.feedback.q1"
+    COMPANION_FEEDBACK_Q2 = "companion.feedback.q2"
+    COMPANION_FEEDBACK_Q3 = "companion.feedback.q3"
+    COMPANION_FEEDBACK_Q4 = "companion.feedback.q4"
+    COMPANION_FEEDBACK_Q5 = "companion.feedback.q5"
+    COMPANION_FEEDBACK_ACK = "companion.feedback.ack"
+    COMPANION_FEEDBACK_COMPLETE = "companion.feedback.complete"
+    COMPANION_FEEDBACK_COMPLETE_NOSAVE = "companion.feedback.complete.nosave"
+    COMPANION_PROCEED_CONFIRMATION = "companion.proceed.confirmation"
+    COMPANION_SKIP_CONFIRMATION = "companion.skip.confirmation"
+    COMPANION_INVALID_FEEDBACK_ERROR = "companion.invalid.feedback.error"
+    COMPANION_SAVE_ERROR = "companion.save.error"
+    COMPANION_GENERAL_ERROR = "companion.general.error"
+    
+    # Other prompts
+    VALIDATION = "validation.input"
+    COMBINED_INSTINCT = "query.combined_instinct"
 
 @dataclass
 class Prompt:
@@ -103,6 +143,21 @@ class PromptManager:
         self.variants: Dict[str, List[Prompt]] = {}  # For A/B testing
         self._loaded = False
     
+    def get_prompt(self, prompt_type, **kwargs) -> str:
+        """
+        Compatibility method for PromptType enum usage.
+        
+        Args:
+            prompt_type: PromptType enum value or string key
+            **kwargs: Variables for formatting
+            
+        Returns:
+            Formatted prompt string
+        """
+        # Convert PromptType enum to string key
+        key = prompt_type.value if hasattr(prompt_type, 'value') else str(prompt_type)
+        return self.get(key, **kwargs)
+        
     def load_prompts(self, prompts_dir: Optional[Path] = None):
         """
         Load all prompts from the prompts directory.

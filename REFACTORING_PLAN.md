@@ -137,33 +137,28 @@ src/
 - [ ] Create comprehensive flow tests
 - [ ] **COMMIT**: "feat: Complete v2 flow engine with FSM"
 
-### Phase 6: Integration & Feature Flags
-- [ ] Add feature flags to main.py:
-  ```python
-  USE_V2_FLOW = os.getenv("USE_V2_FLOW", "false").lower() == "true"
-  ```
-- [ ] Create v2 endpoints alongside v1
-- [ ] Implement switching logic
-- [ ] **COMMIT**: "feat: Add v2 integration with feature flags"
+### Phase 6: V2 Switch-over Preparation
+- [ ] Create new v2/main.py (independent FastAPI app)  
+- [ ] Create V2AgentMessage model (independent from V1)
+- [ ] Test complete V2 system end-to-end
+- [ ] **COMMIT**: "feat: V2 switch-over preparation"
 
-### Phase 7: Testing & Validation
-- [ ] Create comparison tests between v1 and v2
-- [ ] Test all conversation flows
-- [ ] Performance benchmarking
-- [ ] Fix any discrepancies
-- [ ] **COMMIT**: "test: Add comprehensive v2 testing suite"
-
-### Phase 8: Gradual Migration
-- [ ] Enable v2 for internal testing
+### Phase 7: Switch-over Execution
+- [ ] Deploy V2 system
+- [ ] Switch DNS/routing to V2
 - [ ] Monitor for issues
-- [ ] Gradual rollout (10%, 50%, 100%)
-- [ ] **COMMIT**: "feat: Enable v2 in production"
+- [ ] Keep V1 as backup (git tag)
+- [ ] **COMMIT**: "feat: V2 switch-over execution"
 
-### Phase 9: Cleanup
-- [ ] Remove v1 code
-- [ ] Move v2 to root
-- [ ] Update documentation
-- [ ] Archive old implementation
+### Phase 8: Post-Switch Validation
+- [ ] Full system testing in production
+- [ ] Performance validation
+- [ ] Fix any production issues
+- [ ] **COMMIT**: "feat: V2 switch-over validation"
+
+### Phase 9: Cleanup (Optional)
+- [ ] Remove v1 code (after confidence period)
+- [ ] Clean up unused dependencies
 - [ ] **COMMIT**: "refactor: Complete migration to v2"
 
 ## Current Status
@@ -197,6 +192,12 @@ python -m pytest tests/v2/services/test_gpt_service.py -v -m "not integration"
 
 # To see the demo:
 python -m src.v2.services.demo_gpt_service
+
+## Recent Decision (Phase 4)
+**Strategy Change: Switch-over instead of Gradual Migration**
+**Date**: May 25, 2025
+**Reason**: MVP stage with no real users makes switch-over safer and much simpler than parallel systems.
+**Impact**: Removes need for feature flags, compatibility layers, and complex integration. V2 will be completely independent.
 
 ## Code Examples for Reference
 
@@ -278,10 +279,9 @@ RUN_INTEGRATION_TESTS=false
 
 ## Success Metrics
 - [☑️] All prompts in one location
-- [ ] All existing flows work identically
+- [ ] All flows work correctly (V2 can improve on V1)
 - [ ] Response time ≤ current implementation
 - [ ] Error rate < 1%
-- [ ] Code coverage > 80%
 
 ## Notes & Decisions
 - **Why Hybrid Approach**: Safer than full rewrite, allows gradual migration
@@ -289,6 +289,7 @@ RUN_INTEGRATION_TESTS=false
 - **Why Async Services**: Consistency and better performance
 - **Why Prompt Centralization**: Easy fine-tuning and A/B testing
 - **Why Mock-First Testing**: Faster tests, no API costs, deterministic results
+- **Strategy Change**: Switch-over instead of gradual migration
 
 ## Session Log
 <!-- Update this after each work session -->
@@ -312,5 +313,12 @@ RUN_INTEGRATION_TESTS=false
 
 ### Session 4 - May 25, 2025
 - Weaviate Service
+
+### Session 5 - May 25, 2025
+✅ Clean Separation Achieved: Agents only handle message formatting
+✅ PromptManager Integration: All content comes from centralized prompts
+✅ Comprehensive Testing: All message types, response modes, validation, error handling
+✅ Working Demos: Interactive examples showing real usage patterns
+✅ Mock-First Testing: Fast, reliable tests without external dependencies
 ---
 **Remember to update and commit this file after each significant step!**
