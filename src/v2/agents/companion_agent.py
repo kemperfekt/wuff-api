@@ -7,8 +7,7 @@ All business logic (saving feedback, GDPR compliance, etc.) is handled by servic
 """
 
 from typing import List, Dict, Optional, Any
-from src.v2.agents.base_agent import BaseAgent, AgentContext, MessageType
-from src.models.flow_models import AgentMessage
+from src.v2.agents.base_agent import BaseAgent, AgentContext, MessageType, V2AgentMessage
 from src.v2.core.prompt_manager import PromptType
 from src.v2.core.exceptions import V2AgentError, V2ValidationError
 
@@ -51,7 +50,7 @@ class CompanionAgent(BaseAgent):
             MessageType.ERROR
         ]
     
-    async def respond(self, context: AgentContext) -> List[AgentMessage]:
+    async def respond(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate companion messages based on context.
         
@@ -91,7 +90,7 @@ class CompanionAgent(BaseAgent):
             # Fallback to error message if anything goes wrong
             return [self.create_error_message(str(e))]
     
-    async def _handle_greeting(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_greeting(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate feedback introduction message.
         
@@ -104,7 +103,7 @@ class CompanionAgent(BaseAgent):
         intro_text = self.prompt_manager.get_prompt(PromptType.COMPANION_FEEDBACK_INTRO)
         return [self.create_message(intro_text, MessageType.GREETING)]
     
-    async def _handle_question(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_question(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate feedback questions based on question number.
         
@@ -125,7 +124,7 @@ class CompanionAgent(BaseAgent):
         
         return [self.create_message(question_text, MessageType.QUESTION)]
     
-    async def _handle_response(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_response(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate response messages for feedback flow.
         
@@ -151,7 +150,7 @@ class CompanionAgent(BaseAgent):
         else:
             raise V2AgentError(f"Unknown response mode: {response_mode}")
     
-    async def _handle_confirmation(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_confirmation(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate confirmation messages for feedback process.
         
@@ -172,7 +171,7 @@ class CompanionAgent(BaseAgent):
         
         return [self.create_message(text, MessageType.CONFIRMATION)]
     
-    async def _handle_error(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_error(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate error messages for feedback process.
         
@@ -225,7 +224,7 @@ class CompanionAgent(BaseAgent):
         except Exception as e:
             raise V2AgentError(f"Failed to get feedback question {question_number}: {str(e)}") from e
     
-    async def _generate_acknowledgment(self, context: AgentContext) -> List[AgentMessage]:
+    async def _generate_acknowledgment(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate acknowledgment message for received feedback.
         
@@ -239,7 +238,7 @@ class CompanionAgent(BaseAgent):
         ack_text = self.prompt_manager.get_prompt(PromptType.COMPANION_FEEDBACK_ACK)
         return [self.create_message(ack_text, MessageType.RESPONSE)]
     
-    async def _generate_completion(self, context: AgentContext) -> List[AgentMessage]:
+    async def _generate_completion(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate completion message after all feedback collected.
         
@@ -259,7 +258,7 @@ class CompanionAgent(BaseAgent):
         
         return [self.create_message(completion_text, MessageType.RESPONSE)]
     
-    async def _generate_progress(self, context: AgentContext) -> List[AgentMessage]:
+    async def _generate_progress(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate progress indicator message between questions.
         
@@ -295,9 +294,8 @@ class CompanionAgent(BaseAgent):
         # Handle non-integer types
         if not isinstance(question_number, int):
             return False
-        
+            
         return 1 <= question_number <= self._feedback_question_count
-        
     
     def _validate_context_impl(self, context: AgentContext) -> None:
         """
@@ -324,7 +322,7 @@ class CompanionAgent(BaseAgent):
             if not response_mode:
                 raise V2ValidationError("Response context requires 'response_mode' in metadata")
     
-    def create_error_message(self, error_msg: str) -> AgentMessage:
+    def create_error_message(self, error_msg: str) -> V2AgentMessage:
         """
         Override to create companion-specific error messages.
         

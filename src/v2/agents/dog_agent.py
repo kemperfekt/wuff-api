@@ -7,8 +7,7 @@ All business logic (RAG analysis, symptom checking, etc.) is handled by services
 """
 
 from typing import List, Dict, Optional, Any
-from src.v2.agents.base_agent import BaseAgent, AgentContext, MessageType
-from src.models.flow_models import AgentMessage
+from src.v2.agents.base_agent import BaseAgent, AgentContext, MessageType, V2AgentMessage
 from src.v2.core.prompt_manager import PromptType
 from src.v2.core.exceptions import V2AgentError, V2ValidationError
 
@@ -49,7 +48,7 @@ class DogAgent(BaseAgent):
             MessageType.INSTRUCTION
         ]
     
-    async def respond(self, context: AgentContext) -> List[AgentMessage]:
+    async def respond(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate dog perspective messages based on context.
         
@@ -85,7 +84,7 @@ class DogAgent(BaseAgent):
             # Fallback to error message if anything goes wrong
             return [self.create_error_message(str(e))]
     
-    async def _handle_greeting(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_greeting(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate greeting messages from dog perspective.
         
@@ -104,7 +103,7 @@ class DogAgent(BaseAgent):
             self.create_message(follow_up_text, MessageType.QUESTION)
         ]
     
-    async def _handle_response(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_response(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate response messages from dog perspective.
         
@@ -133,7 +132,7 @@ class DogAgent(BaseAgent):
         else:
             raise V2AgentError(f"Unknown response mode: {response_mode}")
     
-    async def _handle_question(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_question(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate question messages from dog perspective.
         
@@ -159,7 +158,7 @@ class DogAgent(BaseAgent):
         
         return [self.create_message(text, MessageType.QUESTION)]
     
-    async def _handle_error(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_error(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate error messages from dog perspective.
         
@@ -182,7 +181,7 @@ class DogAgent(BaseAgent):
         
         return [self.create_message(text, MessageType.ERROR)]
     
-    async def _handle_instruction(self, context: AgentContext) -> List[AgentMessage]:
+    async def _handle_instruction(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate instruction messages from dog perspective.
         
@@ -203,7 +202,7 @@ class DogAgent(BaseAgent):
         
         return [self.create_message(text, MessageType.INSTRUCTION)]
     
-    async def _generate_dog_perspective(self, context: AgentContext) -> List[AgentMessage]:
+    async def _generate_dog_perspective(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate dog perspective response using analysis data.
         
@@ -247,7 +246,7 @@ class DogAgent(BaseAgent):
         
         return [self.create_message(dog_perspective, MessageType.RESPONSE)]
     
-    async def _generate_diagnosis(self, context: AgentContext) -> List[AgentMessage]:
+    async def _generate_diagnosis(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate diagnosis message from dog perspective.
         
@@ -271,7 +270,7 @@ class DogAgent(BaseAgent):
         
         return [self.create_message(diagnosis_text, MessageType.RESPONSE)]
     
-    async def _generate_exercise_response(self, context: AgentContext) -> List[AgentMessage]:
+    async def _generate_exercise_response(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate exercise recommendation response.
         
@@ -291,7 +290,7 @@ class DogAgent(BaseAgent):
             fallback_exercise = self.prompt_manager.get_prompt(PromptType.DOG_FALLBACK_EXERCISE)
             return [self.create_message(fallback_exercise, MessageType.RESPONSE)]
     
-    async def _generate_full_response(self, context: AgentContext) -> List[AgentMessage]:
+    async def _generate_full_response(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate complete response flow (perspective + exercise offer).
         
@@ -341,7 +340,7 @@ class DogAgent(BaseAgent):
             if response_mode == 'exercise' and not context.metadata.get('exercise_data'):
                 raise V2ValidationError("Exercise response mode requires 'exercise_data' in metadata")
     
-    def create_error_message(self, error_msg: str) -> AgentMessage:
+    def create_error_message(self, error_msg: str) -> V2AgentMessage:
         """
         Override to create dog-specific error messages.
         

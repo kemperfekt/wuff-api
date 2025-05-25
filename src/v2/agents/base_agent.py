@@ -12,15 +12,23 @@ Key principles:
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
-from src.models.flow_models import AgentMessage
 from src.v2.core.prompt_manager import PromptManager, PromptType
 from src.v2.core.exceptions import V2AgentError, V2ValidationError
 from src.v2.services.gpt_service import GPTService
 from src.v2.services.weaviate_service import WeaviateService
 from src.v2.services.redis_service import RedisService
+
+
+@dataclass
+class V2AgentMessage:
+    """V2 Agent message - clean and independent from V1"""
+    sender: str
+    text: str
+    message_type: str = "response"
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class MessageType(str, Enum):
@@ -96,7 +104,7 @@ class BaseAgent(ABC):
     async def respond(
         self, 
         context: AgentContext
-    ) -> List[AgentMessage]:
+    ) -> List[V2AgentMessage]:
         """
         Generate response messages based on context.
         
@@ -171,9 +179,9 @@ class BaseAgent(ABC):
         text: str, 
         message_type: MessageType = MessageType.RESPONSE,
         metadata: Optional[Dict[str, Any]] = None
-    ) -> AgentMessage:
+    ) -> V2AgentMessage:
         """
-        Create a formatted AgentMessage.
+        Create a formatted V2AgentMessage.
         
         Args:
             text: Message text content
@@ -181,16 +189,16 @@ class BaseAgent(ABC):
             metadata: Optional metadata
             
         Returns:
-            Formatted AgentMessage
+            Formatted V2AgentMessage
         """
-        return AgentMessage(
+        return V2AgentMessage(
             sender=self.role,
             text=text.strip(),
-            # Add message type to text if debugging enabled
-            # metadata={"type": message_type.value, **(metadata or {})}
+            message_type=message_type.value,
+            metadata=metadata or {}
         )
     
-    def create_error_message(self, error_msg: str) -> AgentMessage:
+    def create_error_message(self, error_msg: str) -> V2AgentMessage:
         """
         Create a user-friendly error message.
         
