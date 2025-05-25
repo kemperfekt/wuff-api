@@ -105,20 +105,20 @@ src/
 - [x] Create test and migration tools
 - [x] **COMMIT**: "feat: Extract all prompts to centralized v2 structure"
 
-### Phase 3: Service Layer Refactoring 🚧
+### Phase 3: Service Layer Refactoring ✅
 - Create core services only (skip RAG, retrieval, session_logger):
-  - [☑️] `v2/services/gpt_service.py` - Async-only OpenAI wrapper (incl. test & demo)
-  - [☑️] `v2/services/weaviate_service.py` - Unified vector operations
-  - [ ] `v2/services/redis_service.py` - Consistent caching/storage
+  - [x] `v2/services/gpt_service.py` - Async-only OpenAI wrapper
+  - [x] `v2/services/weaviate_service.py` - Unified vector operations
+  - [x] `v2/services/redis_service.py` - Consistent caching/storage
 - Each service must:
-  - [ ] Inherit from BaseService
-  - [ ] Use async methods only
-  - [ ] Implement health_check method
-  - [ ] Use V2 exception hierarchy
-  - [ ] Accept prompts as parameters (no embedded prompts)
-- [ ] Create mock-first unit tests for each service
-- [ ] Create integration test suite (separate, optional)
-- [ ] **COMMIT**: "feat: Implement clean v2 service layer"
+  - [x] Inherit from BaseService
+  - [x] Use async methods only
+  - [x] Implement health_check method
+  - [x] Use V2 exception hierarchy
+  - [x] Accept prompts as parameters (no embedded prompts)
+- [x] Create mock-first unit tests for each service
+- [x] Create integration test suite (separate, optional)
+- [x] **COMMIT**: "feat: Implement clean v2 service layer"
 
 ### Phase 4: Agent Refactoring
 - [ ] Create clean agents:
