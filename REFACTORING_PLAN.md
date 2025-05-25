@@ -121,14 +121,14 @@ src/
 - [x] **COMMIT**: "feat: Implement clean v2 service layer"
 
 ### Phase 4: Agent Refactoring
-- [ ] Create clean agents:
-  - [ ] `v2/agents/base_agent.py`
-  - [ ] `v2/agents/dog_agent.py`
-  - [ ] `v2/agents/companion_agent.py`
-- [ ] Remove business logic from agents
-- [ ] Use PromptManager for all content
-- [ ] Agents only handle message formatting and response structure
-- [ ] **COMMIT**: "feat: Implement v2 agents with clean separation"
+- Create clean agents:
+  - [x] `v2/agents/base_agent.py`
+  - [x] `v2/agents/dog_agent.py`
+  - [x] `v2/agents/companion_agent.py`
+- [x] Remove business logic from agents
+- [x] Use PromptManager for all content
+- [x] Agents only handle message formatting and response structure
+- [x] **COMMIT**: "feat: Implement v2 agents with clean separation"
 
 ### Phase 5: Flow Engine Implementation
 - [ ] Define all state transitions in FSM
