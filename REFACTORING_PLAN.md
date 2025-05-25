@@ -108,7 +108,7 @@ src/
 ### Phase 3: Service Layer Refactoring 🚧
 - Create core services only (skip RAG, retrieval, session_logger):
   - [☑️] `v2/services/gpt_service.py` - Async-only OpenAI wrapper (incl. test & demo)
-  - [ ] `v2/services/weaviate_service.py` - Unified vector operations
+  - [☑️] `v2/services/weaviate_service.py` - Unified vector operations
   - [ ] `v2/services/redis_service.py` - Consistent caching/storage
 - Each service must:
   - [ ] Inherit from BaseService
@@ -176,6 +176,9 @@ src/
 - **RAG Service**: Will be split - retrieval goes to WeaviateService, generation to agents
 - **Testing**: Mock-first approach with optional integration tests
 - **No Backwards Compatibility**: V2 is a fresh start with new interfaces
+- **No Query Agent**: Use direct vector search for easier prompt fine-tuning
+- **Weaviate Caching**: Caching with Redis in production only
+- **Interface Design**: Generic over Domain-Specific Methods
 
 ## Recent Notes (Phase 3)
 # Create test directories for V2 services
@@ -304,7 +307,9 @@ RUN_INTEGRATION_TESTS=false
 - Starting Phase 3: Service Layer Refactoring
 - Clarified service scope (GPT, Weaviate, Redis only)
 - Decided on mock-first testing approach
-- Implemented GPTService incl. test & demo
+- Implemented GPTService
 
+### Session 4 - May 25, 2025
+- Weaviate Service
 ---
 **Remember to update and commit this file after each significant step!**
