@@ -131,9 +131,9 @@ src/
 - [x] **COMMIT**: "feat: Implement v2 agents with clean separation"
 
 ### Phase 5: Flow Engine Implementation
-- [ ] Define all state transitions in FSM
-- [ ] Implement flow handlers
-- [ ] Connect to v2 agents and services
+- [x] Define all state transitions in FSM (Flow Engine)
+- [x] Implement flow handlers (Flow Handlers)
+- [x] Connect to v2 agents and services (Orchestrator)
 - [ ] Create comprehensive flow tests
 - [ ] **COMMIT**: "feat: Complete v2 flow engine with FSM"
 
@@ -321,4 +321,10 @@ RUN_INTEGRATION_TESTS=false
 ✅ Working Demos: Interactive examples showing real usage patterns
 ✅ Mock-First Testing: Fast, reliable tests without external dependencies
 ---
+
+
+## For Opus to clean up
+[ ] test_orchestrator.py
+[ ] test_flow_handlers.py
+
 **Remember to update and commit this file after each significant step!**

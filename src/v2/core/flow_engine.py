@@ -1,386 +1,672 @@
 # src/v2/core/flow_engine.py
 """
-Flow Engine with proper FSM implementation for WuffChat V2.
+V2 Flow Engine - Complete FSM-based flow control with handler integration.
 
-This replaces the hardcoded state transitions in the current flow_orchestrator.py
-with a maintainable, testable state machine pattern.
+This replaces the hardcoded flow logic from V1 with a proper finite state machine
+that uses V2 services and agents through clean handlers.
 """
-from typing import Dict, Any, Callable, Optional, List, Tuple
+
+from typing import Dict, List, Optional, Any, Callable, Awaitable
 from enum import Enum
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import logging
-from src.models.flow_models import FlowStep, AgentMessage
+
+from src.models.flow_models import FlowStep
+from src.state.session_state import SessionState
+from src.v2.agents.base_agent import V2AgentMessage
+from src.v2.core.exceptions import V2FlowError, V2ValidationError
+from src.v2.core.flow_handlers import FlowHandlers
 
 logger = logging.getLogger(__name__)
 
+# Type definitions for cleaner code
+TransitionHandler = Callable[[SessionState, str, Dict[str, Any]], Awaitable[List[V2AgentMessage]]]
+TransitionCondition = Callable[[SessionState, str, Dict[str, Any]], bool]
 
-class TransitionEvent(str, Enum):
-    """Events that trigger state transitions"""
-    # Initial events
-    START = "start"
+
+class FlowEvent(str, Enum):
+    """Events that can trigger state transitions"""
     
     # User input events
-    SYMPTOM_RECEIVED = "symptom_received"
-    CONFIRMATION_YES = "confirmation_yes"
-    CONFIRMATION_NO = "confirmation_no"
-    CONTEXT_PROVIDED = "context_provided"
-    EXERCISE_YES = "exercise_yes"
-    EXERCISE_NO = "exercise_no"
-    RESTART_YES = "restart_yes"
-    RESTART_NO = "restart_no"
+    USER_INPUT = "user_input"
+    YES_RESPONSE = "yes_response"  # "ja"
+    NO_RESPONSE = "no_response"   # "nein"
+    
+    # System events
+    SYMPTOM_FOUND = "symptom_found"
+    SYMPTOM_NOT_FOUND = "symptom_not_found"
+    CONTEXT_RECEIVED = "context_received"
+    EXERCISE_REQUESTED = "exercise_requested"
+    EXERCISE_DECLINED = "exercise_declined"
+    
+    # Special commands
+    RESTART_COMMAND = "restart_command"  # "neu", "restart", "von vorne"
     
     # Feedback events
-    FEEDBACK_PROVIDED = "feedback_provided"
+    FEEDBACK_ANSWER = "feedback_answer"
+    FEEDBACK_COMPLETE = "feedback_complete"
     
-    # Special events
-    RESTART_COMMAND = "restart_command"
-    ERROR = "error"
+    # Flow control
+    START_SESSION = "start_session"
+    CONTINUE_FLOW = "continue_flow"
 
 
 @dataclass
-class StateTransition:
-    """Represents a state transition in the FSM"""
+class Transition:
+    """Represents a state transition"""
     from_state: FlowStep
-    event: TransitionEvent
+    event: FlowEvent
     to_state: FlowStep
-    condition: Optional[Callable[[Any], bool]] = None
-    action: Optional[Callable[[Any], Any]] = None
-
-
-@dataclass
-class FlowContext:
-    """Context passed through the flow"""
-    session_id: str
-    user_input: str = ""
-    symptom: str = ""
-    context: str = ""
-    feedback_responses: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    condition: Optional[TransitionCondition] = None
+    handler: Optional[TransitionHandler] = None
+    description: str = ""
 
 
 class FlowEngine:
     """
-    FSM-based flow engine for managing conversation states.
+    Complete FSM-based flow engine with V2 integration.
     
     This engine:
-    - Defines all possible state transitions
-    - Validates transitions before executing
-    - Provides hooks for state entry/exit actions
-    - Maintains transition history for debugging
+    1. Defines all valid state transitions explicitly
+    2. Processes events and triggers appropriate transitions
+    3. Uses FlowHandlers for business logic
+    4. Coordinates V2 agents and services
     """
     
-    def __init__(self):
-        self.transitions: Dict[Tuple[FlowStep, TransitionEvent], StateTransition] = {}
-        self.state_entry_actions: Dict[FlowStep, Callable] = {}
-        self.state_exit_actions: Dict[FlowStep, Callable] = {}
-        self.transition_history: List[Tuple[FlowStep, TransitionEvent, FlowStep]] = []
+    def __init__(self, flow_handlers: Optional[FlowHandlers] = None):
+        """
+        Initialize flow engine with handlers.
+        
+        Args:
+            flow_handlers: Handler instance for business logic
+        """
+        self.logger = logging.getLogger(__name__)
+        
+        # Initialize handlers
+        self.handlers = flow_handlers or FlowHandlers()
+        
+        # Store all defined transitions
+        self.transitions: List[Transition] = []
+        
+        # Quick lookup: {(state, event): Transition}
+        self._transition_map: Dict[tuple, Transition] = {}
+        
+        # Initialize all transitions with handlers
         self._setup_transitions()
+        
+        # Build lookup map
+        self._build_transition_map()
+        
+        logger.info("V2 FlowEngine initialized with complete handler integration")
     
     def _setup_transitions(self):
-        """Define all state transitions for the conversation flow"""
+        """Define all state transitions with their corresponding handlers"""
         
-        # Initial flow
+        # ===========================================
+        # GREETING TRANSITIONS
+        # ===========================================
+        
         self.add_transition(
-            FlowStep.GREETING, 
-            TransitionEvent.START,
-            FlowStep.WAIT_FOR_SYMPTOM
+            from_state=FlowStep.GREETING,
+            event=FlowEvent.START_SESSION,
+            to_state=FlowStep.WAIT_FOR_SYMPTOM,
+            handler=self.handlers.handle_greeting,
+            description="Initial greeting -> wait for symptom description"
         )
         
-        # Symptom handling
-        self.add_transition(
-            FlowStep.WAIT_FOR_SYMPTOM,
-            TransitionEvent.SYMPTOM_RECEIVED,
-            FlowStep.WAIT_FOR_CONFIRMATION,
-            condition=lambda ctx: len(ctx.user_input) >= 10
-        )
-        
-        # Confirmation handling
-        self.add_transition(
-            FlowStep.WAIT_FOR_CONFIRMATION,
-            TransitionEvent.CONFIRMATION_YES,
-            FlowStep.WAIT_FOR_CONTEXT
-        )
+        # ===========================================
+        # SYMPTOM INPUT TRANSITIONS  
+        # ===========================================
         
         self.add_transition(
-            FlowStep.WAIT_FOR_CONFIRMATION,
-            TransitionEvent.CONFIRMATION_NO,
-            FlowStep.END_OR_RESTART
+            from_state=FlowStep.WAIT_FOR_SYMPTOM,
+            event=FlowEvent.USER_INPUT,
+            to_state=FlowStep.WAIT_FOR_CONFIRMATION,
+            handler=self._handle_symptom_wrapper,
+            description="Process symptom input and determine if match found"
         )
         
-        # Context handling
-        self.add_transition(
-            FlowStep.WAIT_FOR_CONTEXT,
-            TransitionEvent.CONTEXT_PROVIDED,
-            FlowStep.ASK_FOR_EXERCISE,
-            condition=lambda ctx: len(ctx.user_input) >= 5
-        )
+        # ===========================================
+        # CONFIRMATION TRANSITIONS
+        # ===========================================
         
-        # Exercise handling
         self.add_transition(
-            FlowStep.ASK_FOR_EXERCISE,
-            TransitionEvent.EXERCISE_YES,
-            FlowStep.END_OR_RESTART
+            from_state=FlowStep.WAIT_FOR_CONFIRMATION,
+            event=FlowEvent.YES_RESPONSE,
+            to_state=FlowStep.WAIT_FOR_CONTEXT,
+            handler=self._handle_confirmation_yes,
+            description="User wants to learn more -> ask for context"
         )
         
         self.add_transition(
-            FlowStep.ASK_FOR_EXERCISE,
-            TransitionEvent.EXERCISE_NO,
-            FlowStep.FEEDBACK_Q1
+            from_state=FlowStep.WAIT_FOR_CONFIRMATION,
+            event=FlowEvent.NO_RESPONSE,
+            to_state=FlowStep.END_OR_RESTART,
+            handler=self._handle_confirmation_no,
+            description="User doesn't want more info -> offer restart"
         )
         
-        # End or restart handling
+        # ===========================================
+        # CONTEXT INPUT TRANSITIONS
+        # ===========================================
+        
         self.add_transition(
-            FlowStep.END_OR_RESTART,
-            TransitionEvent.RESTART_YES,
-            FlowStep.WAIT_FOR_SYMPTOM
+            from_state=FlowStep.WAIT_FOR_CONTEXT,
+            event=FlowEvent.USER_INPUT,
+            to_state=FlowStep.ASK_FOR_EXERCISE,
+            handler=self.handlers.handle_context_input,
+            description="Process context and provide instinct analysis"
+        )
+        
+        # ===========================================
+        # EXERCISE OFFER TRANSITIONS
+        # ===========================================
+        
+        self.add_transition(
+            from_state=FlowStep.ASK_FOR_EXERCISE,
+            event=FlowEvent.YES_RESPONSE,
+            to_state=FlowStep.END_OR_RESTART,
+            handler=self.handlers.handle_exercise_request,
+            description="User wants exercise -> provide exercise and offer restart"
         )
         
         self.add_transition(
-            FlowStep.END_OR_RESTART,
-            TransitionEvent.RESTART_NO,
-            FlowStep.FEEDBACK_Q1
+            from_state=FlowStep.ASK_FOR_EXERCISE,
+            event=FlowEvent.NO_RESPONSE,
+            to_state=FlowStep.FEEDBACK_Q1,
+            handler=self._handle_exercise_declined,
+            description="User doesn't want exercise -> start feedback"
         )
         
-        # Feedback flow
-        feedback_transitions = [
-            (FlowStep.FEEDBACK_Q1, FlowStep.FEEDBACK_Q2),
-            (FlowStep.FEEDBACK_Q2, FlowStep.FEEDBACK_Q3),
-            (FlowStep.FEEDBACK_Q3, FlowStep.FEEDBACK_Q4),
-            (FlowStep.FEEDBACK_Q4, FlowStep.FEEDBACK_Q5),
+        # ===========================================
+        # END/RESTART TRANSITIONS
+        # ===========================================
+        
+        self.add_transition(
+            from_state=FlowStep.END_OR_RESTART,
+            event=FlowEvent.YES_RESPONSE,
+            to_state=FlowStep.WAIT_FOR_SYMPTOM,
+            handler=self._handle_restart_yes,
+            description="User wants another behavior -> restart conversation"
+        )
+        
+        self.add_transition(
+            from_state=FlowStep.END_OR_RESTART,
+            event=FlowEvent.NO_RESPONSE,
+            to_state=FlowStep.FEEDBACK_Q1,
+            handler=self._handle_restart_no,
+            description="User wants to end -> start feedback collection"
+        )
+        
+        # ===========================================
+        # FEEDBACK SEQUENCE TRANSITIONS
+        # ===========================================
+        
+        self.add_transition(
+            from_state=FlowStep.FEEDBACK_Q1,
+            event=FlowEvent.FEEDBACK_ANSWER,
+            to_state=FlowStep.FEEDBACK_Q2,
+            handler=self._handle_feedback_q1,
+            description="First feedback answer -> second question"
+        )
+        
+        self.add_transition(
+            from_state=FlowStep.FEEDBACK_Q2,
+            event=FlowEvent.FEEDBACK_ANSWER,
+            to_state=FlowStep.FEEDBACK_Q3,
+            handler=self._handle_feedback_q2,
+            description="Second feedback answer -> third question"
+        )
+        
+        self.add_transition(
+            from_state=FlowStep.FEEDBACK_Q3,
+            event=FlowEvent.FEEDBACK_ANSWER,
+            to_state=FlowStep.FEEDBACK_Q4,
+            handler=self._handle_feedback_q3,
+            description="Third feedback answer -> fourth question"
+        )
+        
+        self.add_transition(
+            from_state=FlowStep.FEEDBACK_Q4,
+            event=FlowEvent.FEEDBACK_ANSWER,
+            to_state=FlowStep.FEEDBACK_Q5,
+            handler=self._handle_feedback_q4,
+            description="Fourth feedback answer -> fifth question"
+        )
+        
+        self.add_transition(
+            from_state=FlowStep.FEEDBACK_Q5,
+            event=FlowEvent.FEEDBACK_COMPLETE,
+            to_state=FlowStep.GREETING,
+            handler=self.handlers.handle_feedback_completion,
+            description="Final feedback answer -> thank user and restart"
+        )
+        
+        # ===========================================
+        # UNIVERSAL RESTART TRANSITIONS
+        # ===========================================
+        
+        restart_states = [
+            FlowStep.GREETING, FlowStep.WAIT_FOR_SYMPTOM, FlowStep.WAIT_FOR_CONFIRMATION,
+            FlowStep.WAIT_FOR_CONTEXT, FlowStep.ASK_FOR_EXERCISE, FlowStep.END_OR_RESTART,
+            FlowStep.FEEDBACK_Q1, FlowStep.FEEDBACK_Q2, FlowStep.FEEDBACK_Q3, 
+            FlowStep.FEEDBACK_Q4, FlowStep.FEEDBACK_Q5
         ]
         
-        for from_state, to_state in feedback_transitions:
+        for state in restart_states:
             self.add_transition(
-                from_state,
-                TransitionEvent.FEEDBACK_PROVIDED,
-                to_state
+                from_state=state,
+                event=FlowEvent.RESTART_COMMAND,
+                to_state=FlowStep.WAIT_FOR_SYMPTOM,
+                handler=self._handle_restart_command,
+                description=f"Restart command from {state.value} -> new conversation"
             )
+    
+    # ===========================================
+    # HANDLER WRAPPERS
+    # ===========================================
+    
+    async def _handle_symptom_wrapper(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Wrapper for symptom input that handles event determination.
         
-        # Final feedback to greeting
-        self.add_transition(
-            FlowStep.FEEDBACK_Q5,
-            TransitionEvent.FEEDBACK_PROVIDED,
-            FlowStep.GREETING
+        This calls the handler and then determines the next event based on the result.
+        """
+        try:
+            # Call the actual handler
+            next_event, messages = await self.handlers.handle_symptom_input(session, user_input, context)
+            
+            # Store the next event for post-processing
+            context['next_event'] = next_event
+            
+            return messages
+            
+        except Exception as e:
+            logger.error(f"Error in symptom wrapper: {e}")
+            raise
+    
+    async def _handle_confirmation_yes(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """Handle user saying yes to learning more."""
+        from src.v2.agents.base_agent import AgentContext, MessageType
+        
+        agent_context = AgentContext(
+            session_id=session.session_id,
+            message_type=MessageType.QUESTION,
+            metadata={'question_type': 'context'}
         )
         
-        # Global restart command (can be triggered from any state)
-        for state in FlowStep:
-            if state != FlowStep.GREETING:
-                self.add_transition(
-                    state,
-                    TransitionEvent.RESTART_COMMAND,
-                    FlowStep.GREETING
-                )
+        return await self.handlers.dog_agent.respond(agent_context)
+    
+    async def _handle_confirmation_no(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """Handle user saying no to learning more."""
+        from src.v2.agents.base_agent import AgentContext, MessageType
+        
+        agent_context = AgentContext(
+            session_id=session.session_id,
+            message_type=MessageType.QUESTION,
+            metadata={'question_type': 'restart'}
+        )
+        
+        return await self.handlers.dog_agent.respond(agent_context)
+    
+    async def _handle_exercise_declined(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """Handle user declining exercise - start feedback."""
+        return await self.handlers.handle_feedback_question(
+            session, user_input, {'question_number': 1}
+        )
+    
+    async def _handle_restart_yes(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """Handle user wanting to restart."""
+        from src.v2.agents.base_agent import AgentContext, MessageType
+        
+        # Clear previous symptom
+        session.active_symptom = ""
+        
+        agent_context = AgentContext(
+            session_id=session.session_id,
+            message_type=MessageType.INSTRUCTION,
+            metadata={'instruction_type': 'describe_more'}
+        )
+        
+        return await self.handlers.dog_agent.respond(agent_context)
+    
+    async def _handle_restart_no(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """Handle user not wanting to restart - go to feedback."""
+        return await self.handlers.handle_feedback_question(
+            session, user_input, {'question_number': 1}
+        )
+    
+    async def _handle_restart_command(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """Handle restart command from any state."""
+        from src.v2.agents.base_agent import AgentContext, MessageType
+        
+        # Clear session state
+        session.active_symptom = ""
+        if hasattr(session, 'feedback'):
+            session.feedback = []
+        
+        agent_context = AgentContext(
+            session_id=session.session_id,
+            message_type=MessageType.RESPONSE,
+            metadata={'response_mode': 'perspective_only'}
+        )
+        
+        return await self.handlers.dog_agent.respond(agent_context)
+    
+    # Feedback handlers
+    async def _handle_feedback_q1(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+        """Handle feedback Q1 -> Q2"""
+        await self.handlers.handle_feedback_answer(session, user_input, context)
+        return await self.handlers.handle_feedback_question(session, "", {'question_number': 2})
+    
+    async def _handle_feedback_q2(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+        """Handle feedback Q2 -> Q3"""
+        await self.handlers.handle_feedback_answer(session, user_input, context)
+        return await self.handlers.handle_feedback_question(session, "", {'question_number': 3})
+    
+    async def _handle_feedback_q3(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+        """Handle feedback Q3 -> Q4"""
+        await self.handlers.handle_feedback_answer(session, user_input, context)
+        return await self.handlers.handle_feedback_question(session, "", {'question_number': 4})
+    
+    async def _handle_feedback_q4(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+        """Handle feedback Q4 -> Q5"""
+        await self.handlers.handle_feedback_answer(session, user_input, context)
+        return await self.handlers.handle_feedback_question(session, "", {'question_number': 5})
+    
+    # ===========================================
+    # CORE FSM METHODS
+    # ===========================================
     
     def add_transition(
-        self, 
-        from_state: FlowStep, 
-        event: TransitionEvent,
+        self,
+        from_state: FlowStep,
+        event: FlowEvent,
         to_state: FlowStep,
-        condition: Optional[Callable[[FlowContext], bool]] = None,
-        action: Optional[Callable[[FlowContext], Any]] = None
+        condition: Optional[TransitionCondition] = None,
+        handler: Optional[TransitionHandler] = None,
+        description: str = ""
     ):
-        """Add a state transition to the FSM"""
-        transition = StateTransition(
+        """Add a new transition to the FSM"""
+        transition = Transition(
             from_state=from_state,
             event=event,
             to_state=to_state,
             condition=condition,
-            action=action
+            handler=handler,
+            description=description
         )
-        
-        key = (from_state, event)
-        if key in self.transitions:
-            logger.warning(f"Overwriting transition: {from_state} + {event}")
-        
-        self.transitions[key] = transition
+        self.transitions.append(transition)
     
-    def add_state_entry_action(self, state: FlowStep, action: Callable):
-        """Add an action to be executed when entering a state"""
-        self.state_entry_actions[state] = action
+    def _build_transition_map(self):
+        """Build fast lookup map for transitions"""
+        self._transition_map.clear()
+        
+        for transition in self.transitions:
+            key = (transition.from_state, transition.event)
+            
+            # Handle multiple transitions for same state/event (conditions will resolve)
+            if key in self._transition_map:
+                self.logger.warning(
+                    f"Multiple transitions for {transition.from_state.value} + {transition.event.value}. "
+                    f"Using conditions to resolve."
+                )
+            
+            self._transition_map[key] = transition
     
-    def add_state_exit_action(self, state: FlowStep, action: Callable):
-        """Add an action to be executed when exiting a state"""
-        self.state_exit_actions[state] = action
+    def get_valid_transitions(self, current_state: FlowStep) -> List[Transition]:
+        """Get all valid transitions from current state"""
+        return [t for t in self.transitions if t.from_state == current_state]
     
     def can_transition(
         self, 
         current_state: FlowStep, 
-        event: TransitionEvent, 
-        context: FlowContext
+        event: FlowEvent, 
+        session: SessionState,
+        user_input: str = "",
+        context: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Check if a transition is valid"""
         key = (current_state, event)
         
-        if key not in self.transitions:
+        if key not in self._transition_map:
             return False
         
-        transition = self.transitions[key]
+        transition = self._transition_map[key]
         
-        # Check condition if one exists
+        # Check condition if present
         if transition.condition:
-            return transition.condition(context)
+            return transition.condition(session, user_input, context or {})
         
         return True
     
-    def get_next_state(
-        self, 
-        current_state: FlowStep, 
-        event: TransitionEvent
-    ) -> Optional[FlowStep]:
-        """Get the next state for a given current state and event"""
-        key = (current_state, event)
-        
-        if key in self.transitions:
-            return self.transitions[key].to_state
-        
-        return None
-    
-    def transition(
-        self, 
-        current_state: FlowStep, 
-        event: TransitionEvent, 
-        context: FlowContext
-    ) -> Tuple[FlowStep, bool]:
+    async def process_event(
+        self,
+        session: SessionState,
+        event: FlowEvent,
+        user_input: str = "",
+        context: Optional[Dict[str, Any]] = None
+    ) -> tuple[FlowStep, List[V2AgentMessage]]:
         """
-        Execute a state transition.
+        Process an event and execute the appropriate transition.
         
-        Returns:
-            Tuple of (new_state, success)
-        """
-        key = (current_state, event)
-        
-        # Check if transition exists
-        if key not in self.transitions:
-            logger.warning(f"No transition defined for {current_state} + {event}")
-            return current_state, False
-        
-        transition = self.transitions[key]
-        
-        # Check condition
-        if transition.condition and not transition.condition(context):
-            logger.info(f"Transition condition failed for {current_state} + {event}")
-            return current_state, False
-        
-        # Execute exit action for current state
-        if current_state in self.state_exit_actions:
-            try:
-                self.state_exit_actions[current_state](context)
-            except Exception as e:
-                logger.error(f"Error in exit action for {current_state}: {e}")
-        
-        # Execute transition action if any
-        if transition.action:
-            try:
-                transition.action(context)
-            except Exception as e:
-                logger.error(f"Error in transition action: {e}")
-        
-        # Update state
-        new_state = transition.to_state
-        
-        # Execute entry action for new state
-        if new_state in self.state_entry_actions:
-            try:
-                self.state_entry_actions[new_state](context)
-            except Exception as e:
-                logger.error(f"Error in entry action for {new_state}: {e}")
-        
-        # Record transition
-        self.transition_history.append((current_state, event, new_state))
-        
-        logger.info(f"Transitioned from {current_state} to {new_state} via {event}")
-        
-        return new_state, True
-    
-    def get_possible_events(self, current_state: FlowStep) -> List[TransitionEvent]:
-        """Get all possible events from the current state"""
-        events = []
-        
-        for (state, event), transition in self.transitions.items():
-            if state == current_state:
-                events.append(event)
-        
-        return events
-    
-    def reset(self):
-        """Reset the engine state"""
-        self.transition_history.clear()
-    
-    def get_transition_graph(self) -> Dict[str, List[Dict[str, str]]]:
-        """
-        Get a representation of the state machine for visualization.
-        
-        Returns:
-            Dict mapping states to their possible transitions
-        """
-        graph = {}
-        
-        for (from_state, event), transition in self.transitions.items():
-            state_name = from_state.value
+        Args:
+            session: Current session state
+            event: Event to process
+            user_input: User's input (if any)
+            context: Additional context data
             
-            if state_name not in graph:
-                graph[state_name] = []
+        Returns:
+            Tuple of (new_state, messages)
             
-            graph[state_name].append({
-                "event": event.value,
-                "to_state": transition.to_state.value,
-                "has_condition": transition.condition is not None,
-                "has_action": transition.action is not None
-            })
+        Raises:
+            V2FlowError: If transition is invalid or fails
+        """
+        current_state = session.current_step
+        context = context or {}
         
-        return graph
+        self.logger.info(f"Processing event {event.value} from state {current_state.value}")
+        
+        # Check if transition is valid
+        if not self.can_transition(current_state, event, session, user_input, context):
+            valid_events = [t.event.value for t in self.get_valid_transitions(current_state)]
+            raise V2FlowError(
+                current_state=current_state.value,
+                message=f"Invalid transition: {current_state.value} + {event.value}. Valid events: {valid_events}"
+            )
+        
+        # Get the transition
+        key = (current_state, event)
+        transition = self._transition_map[key]
+        
+        try:
+            # Execute transition handler if present
+            messages = []
+            if transition.handler:
+                messages = await transition.handler(session, user_input, context)
+            
+            # Handle special case for symptom input that needs conditional transitions
+            if event == FlowEvent.USER_INPUT and current_state == FlowStep.WAIT_FOR_SYMPTOM:
+                next_event = context.get('next_event')
+                if next_event == 'symptom_not_found':
+                    # Stay in same state, don't transition
+                    self.logger.info("Symptom not found, staying in WAIT_FOR_SYMPTOM")
+                    return current_state, messages
+            
+            # Update session state
+            old_state = session.current_step
+            session.current_step = transition.to_state
+            
+            self.logger.info(
+                f"Transition successful: {old_state.value} -> {transition.to_state.value}"
+            )
+            
+            return transition.to_state, messages
+            
+        except Exception as e:
+            self.logger.error(f"Transition handler failed: {e}")
+            raise V2FlowError(
+                current_state=current_state.value,
+                message=f"Transition execution failed: {str(e)}"
+            ) from e
+    
+    def classify_user_input(self, user_input: str, current_state: FlowStep) -> FlowEvent:
+        """
+        Classify user input into appropriate event for current state.
+        
+        This replaces the hardcoded if/else logic from V1.
+        
+        Args:
+            user_input: User's input text
+            current_state: Current flow state
+            
+        Returns:
+            Classified FlowEvent
+        """
+        user_input = user_input.strip().lower()
+        
+        # Universal restart commands
+        if user_input in ["neu", "restart", "von vorne"]:
+            return FlowEvent.RESTART_COMMAND
+        
+        # State-specific classification
+        if current_state == FlowStep.WAIT_FOR_SYMPTOM:
+            return FlowEvent.USER_INPUT
+        
+        elif current_state in [FlowStep.WAIT_FOR_CONFIRMATION, FlowStep.ASK_FOR_EXERCISE, FlowStep.END_OR_RESTART]:
+            # Yes/No responses
+            if "ja" in user_input:
+                return FlowEvent.YES_RESPONSE
+            elif "nein" in user_input:
+                return FlowEvent.NO_RESPONSE
+            else:
+                return FlowEvent.USER_INPUT  # Will trigger "please say yes or no"
+        
+        elif current_state == FlowStep.WAIT_FOR_CONTEXT:
+            return FlowEvent.USER_INPUT
+        
+        elif current_state in [
+            FlowStep.FEEDBACK_Q1, FlowStep.FEEDBACK_Q2, FlowStep.FEEDBACK_Q3, 
+            FlowStep.FEEDBACK_Q4
+        ]:
+            return FlowEvent.FEEDBACK_ANSWER
+            
+        elif current_state == FlowStep.FEEDBACK_Q5:
+            return FlowEvent.FEEDBACK_COMPLETE
+        
+        else:
+            return FlowEvent.USER_INPUT
+    
+    def get_flow_summary(self) -> Dict[str, Any]:
+        """Get summary of the FSM for debugging/monitoring"""
+        states = list(set([t.from_state for t in self.transitions] + [t.to_state for t in self.transitions]))
+        events = list(set([t.event for t in self.transitions]))
+        
+        return {
+            "total_states": len(states),
+            "total_events": len(events),
+            "total_transitions": len(self.transitions),
+            "states": [s.value for s in states],
+            "events": [e.value for e in events],
+            "transitions": [
+                {
+                    "from": t.from_state.value,
+                    "event": t.event.value,
+                    "to": t.to_state.value,
+                    "description": t.description,
+                    "has_handler": t.handler is not None
+                }
+                for t in self.transitions
+            ]
+        }
+    
+    def validate_fsm(self) -> List[str]:
+        """Validate the FSM for common issues"""
+        issues = []
+        
+        # Check for unreachable states
+        reachable_states = {FlowStep.GREETING}  # Start state
+        for transition in self.transitions:
+            if transition.from_state in reachable_states:
+                reachable_states.add(transition.to_state)
+        
+        all_states = set([t.from_state for t in self.transitions] + [t.to_state for t in self.transitions])
+        unreachable = all_states - reachable_states
+        
+        if unreachable:
+            issues.append(f"Unreachable states: {[s.value for s in unreachable]}")
+        
+        # Check for missing handlers
+        transitions_without_handlers = [t for t in self.transitions if not t.handler]
+        if transitions_without_handlers:
+            issues.append(f"Transitions without handlers: {len(transitions_without_handlers)}")
+        
+        return issues
 
 
-# Helper function to determine event from user input
-def determine_event(
-    current_state: FlowStep, 
-    user_input: str, 
-    context: FlowContext
-) -> TransitionEvent:
-    """
-    Determine which event to trigger based on current state and user input.
+# Create singleton instance
+def create_flow_engine() -> FlowEngine:
+    """Create a properly initialized flow engine"""
+    return FlowEngine()
+
+
+# Validation on import
+if __name__ == "__main__":
+    print("=== V2 Flow Engine Validation ===")
+    engine = create_flow_engine()
+    summary = engine.get_flow_summary()
+    print(f"States: {summary['total_states']}")
+    print(f"Events: {summary['total_events']}")  
+    print(f"Transitions: {summary['total_transitions']}")
     
-    This function maps user input to appropriate events based on the current state.
-    """
-    user_input_lower = user_input.lower().strip()
+    issues = engine.validate_fsm()
+    if issues:
+        print("\n⚠️  Issues found:")
+        for issue in issues:
+            print(f"  - {issue}")
+    else:
+        print("\n✅ FSM validation passed!")
+        
+    print(f"\n📋 Handler Integration:")
+    transitions_with_handlers = sum(1 for t in engine.transitions if t.handler)
+    print(f"  Transitions with handlers: {transitions_with_handlers}/{len(engine.transitions)}")
     
-    # Global restart commands
-    if user_input_lower in ["neu", "restart", "von vorne"]:
-        return TransitionEvent.RESTART_COMMAND
-    
-    # State-specific event determination
-    if current_state == FlowStep.WAIT_FOR_SYMPTOM:
-        if len(user_input) >= 10:
-            return TransitionEvent.SYMPTOM_RECEIVED
-    
-    elif current_state == FlowStep.WAIT_FOR_CONFIRMATION:
-        if "ja" in user_input_lower:
-            return TransitionEvent.CONFIRMATION_YES
-        elif "nein" in user_input_lower:
-            return TransitionEvent.CONFIRMATION_NO
-    
-    elif current_state == FlowStep.WAIT_FOR_CONTEXT:
-        if len(user_input) >= 5:
-            return TransitionEvent.CONTEXT_PROVIDED
-    
-    elif current_state == FlowStep.ASK_FOR_EXERCISE:
-        if "ja" in user_input_lower:
-            return TransitionEvent.EXERCISE_YES
-        elif "nein" in user_input_lower:
-            return TransitionEvent.EXERCISE_NO
-    
-    elif current_state == FlowStep.END_OR_RESTART:
-        if "ja" in user_input_lower:
-            return TransitionEvent.RESTART_YES
-        elif "nein" in user_input_lower:
-            return TransitionEvent.RESTART_NO
-    
-    elif current_state in [
-        FlowStep.FEEDBACK_Q1, FlowStep.FEEDBACK_Q2, 
-        FlowStep.FEEDBACK_Q3, FlowStep.FEEDBACK_Q4, FlowStep.FEEDBACK_Q5
-    ]:
-        return TransitionEvent.FEEDBACK_PROVIDED
-    
-    # Default to error event if no match
-    return TransitionEvent.ERROR
+    if transitions_with_handlers == len(engine.transitions):
+        print("  ✅ All transitions have handlers!")
+    else:
+        print(f"  ⚠️  {len(engine.transitions) - transitions_with_handlers} transitions missing handlers")
