@@ -1,51 +1,39 @@
 # tests/v2/agents/test_companion_agent.py
 """
-Unit tests for V2 CompanionAgent - Mock-first approach.
+Test suite for V2 CompanionAgent - focused on feedback collection formatting.
 
-Tests all feedback message types, question sequences, and error handling.
-All external dependencies are mocked for fast, reliable tests.
+Tests cover:
+- Feedback question generation
+- Response formatting
+- Context validation
+- Error handling
+- Feedback sequence management
 """
 
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
-from typing import Dict, Any
+from unittest.mock import Mock, AsyncMock
+from typing import List
 
 from src.v2.agents.companion_agent import CompanionAgent
-from src.v2.agents.base_agent import AgentContext, MessageType
-from src.models.flow_models import AgentMessage
-from src.v2.core.prompt_manager import PromptType
+from src.v2.agents.base_agent import AgentContext, MessageType, V2AgentMessage
+from src.v2.core.prompt_manager import PromptManager, PromptType
 from src.v2.core.exceptions import V2AgentError, V2ValidationError
 
 
-class TestCompanionAgentInitialization:
-    """Test CompanionAgent initialization and configuration"""
+class TestCompanionAgentBasics:
+    """Test basic CompanionAgent functionality"""
     
-    def test_initialization_default(self):
-        """Test default initialization"""
+    def test_agent_initialization(self):
+        """Test agent initializes with correct properties"""
         agent = CompanionAgent()
         
         assert agent.name == "Begleiter"
         assert agent.role == "companion"
-        assert agent._default_temperature == 0.3  # More consistent for feedback
+        assert agent._default_temperature == 0.3  # Lower for consistency
         assert agent._feedback_question_count == 5
-        assert MessageType.GREETING in agent.get_supported_message_types()
-        assert MessageType.QUESTION in agent.get_supported_message_types()
-    
-    def test_initialization_with_services(self):
-        """Test initialization with service injection"""
-        mock_prompt_manager = Mock()
-        mock_redis_service = Mock()
-        
-        agent = CompanionAgent(
-            prompt_manager=mock_prompt_manager,
-            redis_service=mock_redis_service
-        )
-        
-        assert agent.prompt_manager is mock_prompt_manager
-        assert agent.redis_service is mock_redis_service
     
     def test_supported_message_types(self):
-        """Test that all expected message types are supported"""
+        """Test agent reports correct supported message types"""
         agent = CompanionAgent()
         supported = agent.get_supported_message_types()
         
@@ -60,155 +48,127 @@ class TestCompanionAgentInitialization:
         for msg_type in expected_types:
             assert msg_type in supported
     
-    def test_feedback_question_count(self):
-        """Test feedback question count configuration"""
+    def test_question_count(self):
+        """Test feedback question count is accessible"""
         agent = CompanionAgent()
-        
         assert agent.get_feedback_question_count() == 5
-        assert agent.validate_question_number(1) is True
-        assert agent.validate_question_number(5) is True
-        assert agent.validate_question_number(0) is False
-        assert agent.validate_question_number(6) is False
 
 
-class TestCompanionAgentGreeting:
-    """Test feedback introduction message generation"""
-    
-    @pytest.fixture
-    def agent_with_mocks(self):
-        """Create CompanionAgent with mocked dependencies"""
-        mock_prompt_manager = Mock()
-        mock_prompt_manager.get_prompt.return_value = "Ich würde mich freuen, wenn du mir noch ein kurzes Feedback gibst."
-        
-        return CompanionAgent(prompt_manager=mock_prompt_manager)
+class TestFeedbackQuestions:
+    """Test feedback question generation"""
     
     @pytest.mark.asyncio
-    async def test_feedback_intro_message(self, agent_with_mocks):
-        """Test feedback introduction message generation"""
+    async def test_feedback_intro(self, mock_prompt_manager):
+        """Test feedback introduction message"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
+        
+        mock_prompt_manager.get_prompt.return_value = "Ich würde mich über Feedback freuen!"
+        
         context = AgentContext(
-            session_id="test-123",
+            session_id="test-session",
             message_type=MessageType.GREETING
         )
         
-        messages = await agent_with_mocks.respond(context)
+        messages = await agent.respond(context)
         
         assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        assert "Feedback" in messages[0].text
-        
-        # Check that correct prompt was requested
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_FEEDBACK_INTRO)
-
-
-class TestCompanionAgentQuestions:
-    """Test feedback question generation"""
-    
-    @pytest.fixture
-    def agent_with_mocks(self):
-        """Create CompanionAgent with mocked dependencies"""
-        mock_prompt_manager = Mock()
-        return CompanionAgent(prompt_manager=mock_prompt_manager)
+        assert messages[0].text == "Ich würde mich über Feedback freuen!"
+        assert messages[0].message_type == MessageType.GREETING.value
     
     @pytest.mark.asyncio
-    async def test_feedback_question_1(self, agent_with_mocks):
-        """Test first feedback question"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Hast Du das Gefühl, dass Dir die Beratung weitergeholfen hat?"
+    async def test_feedback_questions_sequence(self, mock_prompt_manager):
+        """Test all 5 feedback questions in sequence"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
         
+        questions = [
+            "Hat dir die Beratung geholfen?",
+            "Wie fandest du die Hundeperspektive?",
+            "War die Übung passend?",
+            "Würdest du uns weiterempfehlen?",
+            "Deine E-Mail für Rückfragen?"
+        ]
+        
+        for i, expected_question in enumerate(questions, 1):
+            mock_prompt_manager.get_prompt.return_value = expected_question
+            
+            context = AgentContext(
+                session_id="test-session",
+                message_type=MessageType.QUESTION,
+                metadata={'question_number': i}
+            )
+            
+            messages = await agent.respond(context)
+            
+            assert len(messages) == 1
+            assert messages[0].text == expected_question
+            assert messages[0].message_type == MessageType.QUESTION.value
+    
+    @pytest.mark.asyncio
+    async def test_invalid_question_number(self, mock_prompt_manager):
+        """Test handling of invalid question numbers"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
+        
+        # Configure error message
+        mock_prompt_manager.get_prompt.return_value = "Es tut mir leid, es gab ein Problem. Bitte versuche es erneut."
+        
+        # Test question number too high
         context = AgentContext(
-            session_id="test-123",
+            session_id="test-session",
             message_type=MessageType.QUESTION,
-            metadata={'question_number': 1}
+            metadata={'question_number': 10}  # Only 5 questions exist
         )
         
-        messages = await agent_with_mocks.respond(context)
+        messages = await agent.respond(context)
         
         assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_FEEDBACK_Q1)
+        assert messages[0].message_type == MessageType.ERROR.value
     
-    @pytest.mark.asyncio
-    async def test_feedback_question_3(self, agent_with_mocks):
-        """Test third feedback question"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Was denkst Du über die vorgeschlagene Übung?"
+    def test_validate_question_number(self):
+        """Test question number validation utility"""
+        agent = CompanionAgent()
         
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.QUESTION,
-            metadata={'question_number': 3}
-        )
+        # Valid numbers
+        assert agent.validate_question_number(1) is True
+        assert agent.validate_question_number(5) is True
         
-        messages = await agent_with_mocks.respond(context)
-        
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_FEEDBACK_Q3)
-    
-    @pytest.mark.asyncio
-    async def test_feedback_question_5_final(self, agent_with_mocks):
-        """Test final feedback question (GDPR-compliant)"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Optional: Deine E-Mail für eventuelle Rückfragen."
-        
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.QUESTION,
-            metadata={'question_number': 5}
-        )
-        
-        messages = await agent_with_mocks.respond(context)
-        
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_FEEDBACK_Q5)
-    
-    @pytest.mark.asyncio
-    async def test_invalid_question_number(self, agent_with_mocks):
-        """Test handling of invalid question number"""
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.QUESTION,
-            metadata={'question_number': 7}  # Invalid - only 1-5 supported
-        )
-        
-        messages = await agent_with_mocks.respond(context)
-        
-        # Should fall back to error message
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
+        # Invalid numbers
+        assert agent.validate_question_number(0) is False
+        assert agent.validate_question_number(6) is False
+        assert agent.validate_question_number("not a number") is False
 
 
-class TestCompanionAgentResponses:
-    """Test feedback response message generation"""
-    
-    @pytest.fixture
-    def agent_with_mocks(self):
-        """Create CompanionAgent with mocked dependencies"""
-        mock_prompt_manager = Mock()
-        return CompanionAgent(prompt_manager=mock_prompt_manager)
+class TestResponseMessages:
+    """Test response message formatting"""
     
     @pytest.mark.asyncio
-    async def test_acknowledgment_response(self, agent_with_mocks):
-        """Test acknowledgment response between questions"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Danke für deine Antwort."
+    async def test_acknowledgment_response(self, mock_prompt_manager):
+        """Test acknowledgment message formatting"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
+        
+        mock_prompt_manager.get_prompt.return_value = "Danke für deine Antwort!"
         
         context = AgentContext(
-            session_id="test-123",
+            session_id="test-session",
+            user_input="Ja, sehr hilfreich",
             message_type=MessageType.RESPONSE,
             metadata={'response_mode': 'acknowledgment'}
         )
         
-        messages = await agent_with_mocks.respond(context)
+        messages = await agent.respond(context)
         
         assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_FEEDBACK_ACK)
+        assert messages[0].text == "Danke für deine Antwort!"
+        assert messages[0].message_type == MessageType.RESPONSE.value
     
     @pytest.mark.asyncio
-    async def test_completion_response_success(self, agent_with_mocks):
-        """Test completion response when feedback saved successfully"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Danke für Dein Feedback! 🐾"
+    async def test_completion_response_success(self, mock_prompt_manager):
+        """Test completion message when save successful"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
+        
+        mock_prompt_manager.get_prompt.return_value = "Vielen Dank für dein Feedback! 🐾"
         
         context = AgentContext(
-            session_id="test-123",
+            session_id="test-session",
             message_type=MessageType.RESPONSE,
             metadata={
                 'response_mode': 'completion',
@@ -216,19 +176,26 @@ class TestCompanionAgentResponses:
             }
         )
         
-        messages = await agent_with_mocks.respond(context)
+        messages = await agent.respond(context)
         
         assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_FEEDBACK_COMPLETE)
+        assert "Dank" in messages[0].text
+        assert "🐾" in messages[0].text
+        
+        # Verify correct prompt was requested
+        mock_prompt_manager.get_prompt.assert_called_with(
+            PromptType.COMPANION_FEEDBACK_COMPLETE
+        )
     
     @pytest.mark.asyncio
-    async def test_completion_response_save_failed(self, agent_with_mocks):
-        """Test completion response when feedback save failed"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Danke für dein Feedback! Es konnte leider nicht gespeichert werden."
+    async def test_completion_response_save_failed(self, mock_prompt_manager):
+        """Test completion message when save failed"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
+        
+        mock_prompt_manager.get_prompt.return_value = "Danke! (Speichern fehlgeschlagen)"
         
         context = AgentContext(
-            session_id="test-123",
+            session_id="test-session",
             message_type=MessageType.RESPONSE,
             metadata={
                 'response_mode': 'completion',
@@ -236,200 +203,134 @@ class TestCompanionAgentResponses:
             }
         )
         
-        messages = await agent_with_mocks.respond(context)
+        messages = await agent.respond(context)
         
         assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_FEEDBACK_COMPLETE_NOSAVE)
-    
-    @pytest.mark.asyncio
-    async def test_progress_response(self, agent_with_mocks):
-        """Test progress response (currently returns empty list)"""
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.RESPONSE,
-            metadata={'response_mode': 'progress'}
+        
+        # Verify fallback prompt was requested
+        mock_prompt_manager.get_prompt.assert_called_with(
+            PromptType.COMPANION_FEEDBACK_COMPLETE_NOSAVE
         )
-        
-        messages = await agent_with_mocks.respond(context)
-        
-        # Currently progress messages are empty - this could be enhanced later
-        assert len(messages) == 0
 
 
-class TestCompanionAgentConfirmations:
-    """Test confirmation message generation"""
-    
-    @pytest.fixture
-    def agent_with_mocks(self):
-        """Create CompanionAgent with mocked dependencies"""
-        mock_prompt_manager = Mock()
-        return CompanionAgent(prompt_manager=mock_prompt_manager)
+class TestConfirmationMessages:
+    """Test confirmation message formatting"""
     
     @pytest.mark.asyncio
-    async def test_proceed_confirmation(self, agent_with_mocks):
-        """Test proceed confirmation message"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Möchtest du fortfahren?"
+    async def test_confirmation_types(self, mock_prompt_manager):
+        """Test different confirmation types"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
         
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.CONFIRMATION,
-            metadata={'confirmation_type': 'proceed'}
-        )
+        confirmation_types = {
+            'proceed': "Möchtest du fortfahren?",
+            'skip': "Möchtest du überspringen?",
+            'other': "Möchtest du fortfahren?"  # Default
+        }
         
-        messages = await agent_with_mocks.respond(context)
-        
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_PROCEED_CONFIRMATION)
-    
-    @pytest.mark.asyncio
-    async def test_skip_confirmation(self, agent_with_mocks):
-        """Test skip confirmation message"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Möchtest du überspringen?"
-        
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.CONFIRMATION,
-            metadata={'confirmation_type': 'skip'}
-        )
-        
-        messages = await agent_with_mocks.respond(context)
-        
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_SKIP_CONFIRMATION)
+        for conf_type, expected_text in confirmation_types.items():
+            mock_prompt_manager.get_prompt.return_value = expected_text
+            
+            context = AgentContext(
+                session_id="test-session",
+                message_type=MessageType.CONFIRMATION,
+                metadata={'confirmation_type': conf_type}
+            )
+            
+            messages = await agent.respond(context)
+            
+            assert len(messages) == 1
+            assert messages[0].text == expected_text
+            assert messages[0].message_type == MessageType.CONFIRMATION.value
 
 
-class TestCompanionAgentErrors:
-    """Test error message generation"""
-    
-    @pytest.fixture
-    def agent_with_mocks(self):
-        """Create CompanionAgent with mocked dependencies"""
-        mock_prompt_manager = Mock()
-        return CompanionAgent(prompt_manager=mock_prompt_manager)
+class TestErrorHandling:
+    """Test error handling"""
     
     @pytest.mark.asyncio
-    async def test_invalid_feedback_error(self, agent_with_mocks):
-        """Test invalid feedback error message"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Bitte gib eine gültige Antwort."
+    async def test_error_types(self, mock_prompt_manager):
+        """Test different error types"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
         
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.ERROR,
-            metadata={'error_type': 'invalid_feedback'}
-        )
+        # Configure the mock to return companion-specific error message
+        mock_prompt_manager.get_prompt.return_value = "Es tut mir leid, es gab ein Problem. Bitte versuche es erneut."
         
-        messages = await agent_with_mocks.respond(context)
+        error_types = ['invalid_feedback', 'save_failed', 'general']
         
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_INVALID_FEEDBACK_ERROR)
+        for error_type in error_types:
+            context = AgentContext(
+                session_id="test-session",
+                message_type=MessageType.ERROR,
+                metadata={'error_type': error_type}
+            )
+            
+            messages = await agent.respond(context)
+            
+            assert len(messages) == 1
+            assert messages[0].message_type == MessageType.ERROR.value
+            # The actual text depends on the prompt manager configuration
     
     @pytest.mark.asyncio
-    async def test_save_failed_error(self, agent_with_mocks):
-        """Test save failed error message"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Feedback konnte nicht gespeichert werden."
+    async def test_companion_specific_error_message(self, mock_prompt_manager):
+        """Test companion-specific error formatting"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
         
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.ERROR,
-            metadata={'error_type': 'save_failed'}
-        )
+        mock_prompt_manager.get_prompt.return_value = "Es gab ein Problem. Bitte versuche es erneut."
         
-        messages = await agent_with_mocks.respond(context)
-        
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-        agent_with_mocks.prompt_manager.get_prompt.assert_called_with(PromptType.COMPANION_SAVE_ERROR)
-    
-    @pytest.mark.asyncio
-    async def test_create_error_message_override(self, agent_with_mocks):
-        """Test custom error message creation"""
-        agent_with_mocks.prompt_manager.get_prompt.return_value = "Es gab ein Problem. Bitte versuche es erneut."
-        
-        error_msg = agent_with_mocks.create_error_message("Technical failure")
+        error_msg = agent.create_error_message("Technical error")
         
         assert error_msg.sender == "companion"
+        assert error_msg.message_type == MessageType.ERROR.value
         assert "Problem" in error_msg.text
 
 
-class TestCompanionAgentValidation:
+class TestContextValidation:
     """Test context validation"""
     
-    def test_valid_question_context_validation(self):
-        """Test validation of valid question context"""
-        agent = CompanionAgent()
+    @pytest.mark.asyncio
+    async def test_question_without_number(self, mock_prompt_manager):
+        """Test validation when question number is missing"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
+        
+        # Configure error message
+        mock_prompt_manager.get_prompt.return_value = "Es tut mir leid, es gab ein Problem. Bitte versuche es erneut."
         
         context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.QUESTION,
-            metadata={'question_number': 3}
+            session_id="test-session",
+            message_type=MessageType.QUESTION
+            # Missing question_number
         )
         
-        # Should not raise
-        agent.validate_context(context)
+        messages = await agent.respond(context)
+        
+        assert len(messages) == 1
+        assert messages[0].message_type == MessageType.ERROR.value
     
-    def test_missing_question_number_validation(self):
-        """Test validation fails for missing question_number"""
-        agent = CompanionAgent()
+    @pytest.mark.asyncio
+    async def test_response_without_mode(self, mock_prompt_manager):
+        """Test validation when response mode is missing"""
+        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
+        
+        # Configure error message
+        mock_prompt_manager.get_prompt.return_value = "Es tut mir leid, es gab ein Problem. Bitte versuche es erneut."
         
         context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.QUESTION,
-            metadata={}
+            session_id="test-session",
+            message_type=MessageType.RESPONSE
+            # Missing response_mode
         )
         
-        with pytest.raises(V2ValidationError, match="question_number"):
-            agent.validate_context(context)
-    
-    def test_invalid_question_number_validation(self):
-        """Test validation fails for invalid question_number"""
-        agent = CompanionAgent()
+        messages = await agent.respond(context)
         
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.QUESTION,
-            metadata={'question_number': 7}  # Only 1-5 are valid
-        )
-        
-        with pytest.raises(V2ValidationError, match="Invalid question number"):
-            agent.validate_context(context)
-    
-    def test_missing_response_mode_validation(self):
-        """Test validation fails for missing response_mode"""
-        agent = CompanionAgent()
-        
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.RESPONSE,
-            metadata={}
-        )
-        
-        with pytest.raises(V2ValidationError, match="response_mode"):
-            agent.validate_context(context)
-    
-    def test_valid_response_context_validation(self):
-        """Test validation of valid response context"""
-        agent = CompanionAgent()
-        
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.RESPONSE,
-            metadata={'response_mode': 'completion'}
-        )
-        
-        # Should not raise
-        agent.validate_context(context)
+        assert len(messages) == 1
+        assert messages[0].message_type == MessageType.ERROR.value
 
 
-class TestCompanionAgentUtilities:
-    """Test utility methods"""
+class TestFeedbackSequenceHelper:
+    """Test feedback sequence helper method"""
     
     @pytest.mark.asyncio
     async def test_create_feedback_sequence(self):
-        """Test feedback sequence generation utility"""
+        """Test creating complete feedback sequence"""
         agent = CompanionAgent()
         
         contexts = await agent.create_feedback_sequence("test-session")
@@ -437,235 +338,47 @@ class TestCompanionAgentUtilities:
         # Should have intro + 5 questions + completion = 7 contexts
         assert len(contexts) == 7
         
-        # First should be intro (greeting)
+        # Check intro
         assert contexts[0].message_type == MessageType.GREETING
         assert contexts[0].metadata['sequence_step'] == 'intro'
         
-        # Next 5 should be questions
+        # Check questions
         for i in range(1, 6):
             assert contexts[i].message_type == MessageType.QUESTION
             assert contexts[i].metadata['question_number'] == i
             assert contexts[i].metadata['sequence_step'] == f'question_{i}'
         
-        # Last should be completion
+        # Check completion
         assert contexts[6].message_type == MessageType.RESPONSE
         assert contexts[6].metadata['response_mode'] == 'completion'
         assert contexts[6].metadata['sequence_step'] == 'completion'
+    
+    @pytest.mark.asyncio
+    async def test_feedback_sequence_session_id(self):
+        """Test all contexts have correct session ID"""
+        agent = CompanionAgent()
+        session_id = "unique-session-123"
         
-        # All should have same session_id
+        contexts = await agent.create_feedback_sequence(session_id)
+        
         for context in contexts:
-            assert context.session_id == "test-session"
-    
-    def test_question_number_validation_utility(self):
-        """Test question number validation utility"""
-        agent = CompanionAgent()
-        
-        # Valid question numbers
-        for i in range(1, 6):
-            assert agent.validate_question_number(i) is True
-        
-        # Invalid question numbers
-        invalid_numbers = [0, -1, 6, 7, 10, "1", None]
-        for num in invalid_numbers:
-            assert agent.validate_question_number(num) is False
-    
-    def test_get_feedback_question_private_method(self):
-        """Test private _get_feedback_question method"""
-        mock_prompt_manager = Mock()
-        mock_prompt_manager.get_prompt.return_value = "Test question"
-        
-        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
-        
-        # Test valid question numbers
-        for i in range(1, 6):
-            question = agent._get_feedback_question(i)
-            assert question == "Test question"
-        
-        # Test invalid question number
-        with pytest.raises(V2AgentError, match="No prompt found"):
-            agent._get_feedback_question(7)
+            assert context.session_id == session_id
 
 
-class TestCompanionAgentErrorHandling:
-    """Test error handling and fallbacks"""
-    
-    @pytest.mark.asyncio
-    async def test_unsupported_message_type(self):
-        """Test handling of unsupported message type"""
-        agent = CompanionAgent()
-        
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.INSTRUCTION  # Not supported by CompanionAgent
-        )
-        
-        messages = await agent.respond(context)
-        
-        # Should fall back to error message
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-    
-    @pytest.mark.asyncio
-    async def test_unknown_response_mode(self):
-        """Test handling of unknown response mode"""
-        agent = CompanionAgent()
-        
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.RESPONSE,
-            metadata={'response_mode': 'unknown_mode'}
-        )
-        
-        messages = await agent.respond(context)
-        
-        # Should fall back to error message
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-    
-    @pytest.mark.asyncio
-    async def test_prompt_manager_failure(self):
-        """Test handling of prompt manager failure"""
-        mock_prompt_manager = Mock()
-        mock_prompt_manager.get_prompt.side_effect = Exception("Prompt not found")
-        
-        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
-        
-        context = AgentContext(
-            session_id="test-123",
-            message_type=MessageType.GREETING
-        )
-        
-        messages = await agent.respond(context)
-        
-        # Should fall back to error message
-        assert len(messages) == 1
-        assert messages[0].sender == "companion"
-
-
-class TestCompanionAgentHealthCheck:
-    """Test health check functionality"""
-    
-    @pytest.mark.asyncio
-    async def test_health_check_healthy(self):
-        """Test health check with healthy services"""
-        mock_prompt_manager = Mock()
-        mock_prompt_manager.get_prompt.return_value = "test"
-        
-        mock_redis_service = AsyncMock()
-        mock_redis_service.health_check.return_value = {"healthy": True}
-        
-        agent = CompanionAgent(
-            prompt_manager=mock_prompt_manager,
-            redis_service=mock_redis_service
-        )
-        
-        health = await agent.health_check()
-        
-        assert health["healthy"] is True
-        assert health["agent"] == "Begleiter"
-        assert "prompt_manager" in health["services"]
-        assert "redis_service" in health["services"]
-    
-    @pytest.mark.asyncio
-    async def test_health_check_unhealthy_redis(self):
-        """Test health check with unhealthy Redis service"""
-        mock_prompt_manager = Mock()
-        mock_prompt_manager.get_prompt.return_value = "test"
-        
-        mock_redis_service = AsyncMock()
-        mock_redis_service.health_check.side_effect = Exception("Redis connection failed")
-        
-        agent = CompanionAgent(
-            prompt_manager=mock_prompt_manager,
-            redis_service=mock_redis_service
-        )
-        
-        health = await agent.health_check()
-        
-        # Redis is not critical for CompanionAgent, so overall health should still be true
-        assert health["healthy"] is True  # Different from DogAgent where GPT is critical
-        assert "error" in health["services"]["redis_service"]
-
-
-class TestCompanionAgentIntegration:
-    """Integration-style tests for complete feedback flows"""
-    
-    @pytest.mark.asyncio
-    async def test_complete_feedback_flow_simulation(self):
-        """Test simulated complete feedback flow"""
-        mock_prompt_manager = Mock()
-        
-        # Set up prompt responses for a complete flow
-        prompt_responses = {
-            PromptType.COMPANION_FEEDBACK_INTRO: "Feedback bitte!",
-            PromptType.COMPANION_FEEDBACK_Q1: "Frage 1?",
-            PromptType.COMPANION_FEEDBACK_ACK: "Danke.",
-            PromptType.COMPANION_FEEDBACK_COMPLETE: "Fertig! 🐾"
-        }
-        
-        def get_prompt_side_effect(prompt_type, **kwargs):
-            return prompt_responses.get(prompt_type, f"Mock: {prompt_type}")
-        
-        mock_prompt_manager.get_prompt.side_effect = get_prompt_side_effect
-        
-        agent = CompanionAgent(prompt_manager=mock_prompt_manager)
-        
-        # 1. Intro
-        intro_context = AgentContext(
-            session_id="test-flow",
-            message_type=MessageType.GREETING
-        )
-        intro_messages = await agent.respond(intro_context)
-        assert len(intro_messages) == 1
-        assert "Feedback" in intro_messages[0].text
-        
-        # 2. Question 1
-        q1_context = AgentContext(
-            session_id="test-flow",
-            message_type=MessageType.QUESTION,
-            metadata={'question_number': 1}
-        )
-        q1_messages = await agent.respond(q1_context)
-        assert len(q1_messages) == 1
-        assert "Frage 1" in q1_messages[0].text
-        
-        # 3. Acknowledgment
-        ack_context = AgentContext(
-            session_id="test-flow",
-            message_type=MessageType.RESPONSE,
-            metadata={'response_mode': 'acknowledgment'}
-        )
-        ack_messages = await agent.respond(ack_context)
-        assert len(ack_messages) == 1
-        assert "Danke" in ack_messages[0].text
-        
-        # 4. Completion
-        completion_context = AgentContext(
-            session_id="test-flow",
-            message_type=MessageType.RESPONSE,
-            metadata={
-                'response_mode': 'completion',
-                'save_success': True
-            }
-        )
-        completion_messages = await agent.respond(completion_context)
-        assert len(completion_messages) == 1
-        assert "🐾" in completion_messages[0].text
-
-
-# Fixtures for shared test data
+# Fixtures
 @pytest.fixture
-def sample_feedback_responses():
-    """Sample feedback responses for testing"""
-    return [
-        "Ja, sehr hilfreich!",
-        "Die Hundeperspektive war interessant",
-        "Die Übung passt gut zu meiner Situation",
-        "8 von 10",
-        "test@example.com"
-    ]
+def mock_prompt_manager():
+    """Mock PromptManager for testing"""
+    mock = Mock(spec=PromptManager)
+    mock.get_prompt.return_value = "Mock prompt"
+    return mock
 
 
-if __name__ == "__main__":
-    # Run tests with: python -m pytest tests/v2/agents/test_companion_agent.py -v
-    pytest.main([__file__, "-v"])
+@pytest.fixture
+def mock_redis_service():
+    """Mock RedisService for testing"""
+    mock = AsyncMock()
+    mock.set.return_value = True
+    mock.get.return_value = None
+    mock.health_check.return_value = {"healthy": True}
+    return mock

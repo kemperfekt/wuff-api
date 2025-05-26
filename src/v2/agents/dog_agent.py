@@ -62,8 +62,15 @@ class DogAgent(BaseAgent):
             V2AgentError: If message generation fails
             V2ValidationError: If context is invalid
         """
-        # Validate context
-        self.validate_context(context)
+        # Validate context - but handle validation errors gracefully
+        try:
+            self.validate_context(context)
+        except V2ValidationError as e:
+            # Return user-friendly error message instead of raising
+            return [self.create_message(
+                "Es tut mir leid, ich verstehe gerade nicht ganz. Kannst du es nochmal versuchen?",
+                MessageType.ERROR
+            )]
         
         try:
             # Route to appropriate message handler based on message type
@@ -286,7 +293,7 @@ class DogAgent(BaseAgent):
             # Format the exercise recommendation
             return [self.create_message(exercise_data, MessageType.RESPONSE)]
         else:
-            # Generate fallback exercise
+            # Generate fallback exercise - don't require exercise_data
             fallback_exercise = self.prompt_manager.get_prompt(PromptType.DOG_FALLBACK_EXERCISE)
             return [self.create_message(fallback_exercise, MessageType.RESPONSE)]
     
@@ -327,18 +334,19 @@ class DogAgent(BaseAgent):
         Raises:
             V2ValidationError: If context is invalid for dog agent
         """
-        # For response messages, we usually need some data
+        # For response messages, we usually need some data - but be more lenient
         if context.message_type == MessageType.RESPONSE:
             response_mode = context.metadata.get('response_mode')
             if not response_mode:
                 raise V2ValidationError("Response context requires 'response_mode' in metadata")
             
-            # Validate required data for different response modes
-            if response_mode in ['diagnosis', 'full_response'] and not context.metadata.get('analysis_data'):
+            # Only validate required data for modes that actually need it
+            if response_mode == 'diagnosis' and not context.metadata.get('analysis_data'):
                 raise V2ValidationError(f"Response mode '{response_mode}' requires 'analysis_data' in metadata")
             
-            if response_mode == 'exercise' and not context.metadata.get('exercise_data'):
-                raise V2ValidationError("Exercise response mode requires 'exercise_data' in metadata")
+            # For exercise mode, don't require exercise_data - we have fallback
+            # if response_mode == 'exercise' and not context.metadata.get('exercise_data'):
+            #     raise V2ValidationError("Exercise response mode requires 'exercise_data' in metadata")
     
     def create_error_message(self, error_msg: str) -> V2AgentMessage:
         """

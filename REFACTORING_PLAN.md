@@ -2,25 +2,24 @@
 
 ## Project Overview
 - **Start Date**: May 24, 2025
-- **Current Branch**: refactor/v2-architecture
-- **Last Updated**: May 24, 2025
-- **Last Completed Step**: Phase 2 - Prompt Extraction
+- **Current Branch**: refactor/prompts
+
 
 ## Context for New Chat Sessions
 ```
 I'm refactoring a FastAPI dog behavior consultation chatbot. 
 Current issues: No real FSM, mixed concerns, scattered prompts.
-Solution: Building v2 in parallel using hybrid approach.
-All details in this document. Continue from "Current Status".
+Solution: Building v2 in parallel. All details in this document. 
+Continue from "Current Status".
 ```
 
 ## Architecture Problems Identified
-- [x] FSM defined but not used (state_machine.py is orphaned)
-- [x] Flow logic hardcoded in flow_orchestrator.py (500+ lines)
-- [x] Prompts scattered across 5+ files
-- [ ] Mixed async/sync patterns
-- [ ] Inconsistent service patterns (singleton vs static vs instance)
-- [ ] Agents doing too much (business logic + formatting)
+- FSM defined but not used (state_machine.py is orphaned)
+- Flow logic hardcoded in flow_orchestrator.py (500+ lines)
+- Prompts scattered across 5+ files
+- Mixed async/sync patterns
+- Inconsistent service patterns (singleton vs static vs instance)
+- Agents doing too much (business logic + formatting)
 
 ## Target Architecture
 
@@ -86,7 +85,7 @@ src/
 - [x] **COMMIT**: "feat: Add V2 core infrastructure with FSM engine"
 
 ### Phase 2: Prompt Extraction ✅
-- [x] Create prompt structure:
+- Create prompt structure:
   - [x] `v2/prompts/__init__.py`
   - [x] `v2/prompts/dog_prompts.py`
   - [x] `v2/prompts/companion_prompts.py`
@@ -94,7 +93,7 @@ src/
   - [x] `v2/prompts/validation_prompts.py`
   - [x] `v2/prompts/generation_prompts.py`
   - [x] `v2/prompts/common_prompts.py`
-- [x] Extract all prompts from:
+- Extract all prompts from:
   - [x] `src/config/prompts.py`
   - [x] `src/services/gpt_service.py`
   - [x] `src/flow/flow_orchestrator.py`
@@ -122,12 +121,14 @@ src/
 
 ### Phase 4: Agent Refactoring
 - Create clean agents:
-  - [x] `v2/agents/base_agent.py`
-  - [x] `v2/agents/dog_agent.py`
-  - [x] `v2/agents/companion_agent.py`
+-   [x] `v2/agents/base_agent.py`
+-   [x] `v2/agents/dog_agent.py`
+-   [x] `v2/agents/companion_agent.py`
 - [x] Remove business logic from agents
 - [x] Use PromptManager for all content
 - [x] Agents only handle message formatting and response structure
+- [x] Create mock-first unit tests for each agent
+- [x] Create integration test suite
 - [x] **COMMIT**: "feat: Implement v2 agents with clean separation"
 
 ### Phase 5: Flow Engine Implementation
@@ -162,8 +163,8 @@ src/
 - [ ] **COMMIT**: "refactor: Complete migration to v2"
 
 ## Current Status
-**Currently Working On**: Phase 3 - Service Layer Refactoring
-**Next Step**: Create v2/services/gpt_service.py with async-only methods
+**Currently Working On**: Phase 4 - Agent tests
+**Next Step**: Phase 5 - FSM
 **Blockers**: None
 
 ## Recent Decisions (Phase 3)
@@ -175,23 +176,6 @@ src/
 - **Weaviate Caching**: Caching with Redis in production only
 - **Interface Design**: Generic over Domain-Specific Methods
 
-## Recent Notes (Phase 3)
-# Create test directories for V2 services
-mkdir -p tests/v2/services
-touch tests/v2/services/__init__.py
-
-# Create the service directory
-mkdir -p src/v2/services
-touch src/v2/services/__init__.py
-
-# To run the tests (after creating all files):
-python -m pytest tests/v2/services/test_gpt_service.py -v
-
-# To run only unit tests (skip integration):
-python -m pytest tests/v2/services/test_gpt_service.py -v -m "not integration"
-
-# To see the demo:
-python -m src.v2.services.demo_gpt_service
 
 ## Recent Decision (Phase 4)
 **Strategy Change: Switch-over instead of Gradual Migration**
@@ -284,7 +268,6 @@ RUN_INTEGRATION_TESTS=false
 - [ ] Error rate < 1%
 
 ## Notes & Decisions
-- **Why Hybrid Approach**: Safer than full rewrite, allows gradual migration
 - **Why FSM**: Current hardcoded flow is brittle and hard to modify
 - **Why Async Services**: Consistency and better performance
 - **Why Prompt Centralization**: Easy fine-tuning and A/B testing
@@ -322,6 +305,9 @@ RUN_INTEGRATION_TESTS=false
 ✅ Mock-First Testing: Fast, reliable tests without external dependencies
 ---
 
+### Session 6 - May 26, 2025
+[x] Review Agent code
+[x] Refactor tests
 
 ## For Opus to clean up
 [ ] test_orchestrator.py
