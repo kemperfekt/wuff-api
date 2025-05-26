@@ -1,0 +1,251 @@
+# WuffChat V2 Test Suite Documentation
+
+## Overview
+
+The V2 test suite provides comprehensive testing for the new FSM-based flow engine, handlers, and orchestrator. All tests use proper mocking to ensure fast, reliable test execution without external dependencies.
+
+## Test Structure
+
+```
+tests/v2/core/
+├── conftest.py              # Shared fixtures and mocks
+├── test_flow_handlers.py    # Business logic tests
+├── test_flow_engine.py      # FSM mechanics tests
+└── test_orchestrator.py     # Integration and API tests
+```
+
+## Running the Test Suite
+
+### 🚀 Complete Test Suite
+
+```bash
+# Run all V2 tests with verbose output
+pytest tests/v2/core/ -v
+
+# Run with coverage report
+pytest tests/v2/core/ --cov=src/v2 --cov-report=html -v
+
+# Run and see print statements (useful for demos)
+pytest tests/v2/core/ -v -s
+```
+
+### 📋 Individual Test Files
+
+```bash
+# Test the Orchestrator (integration tests)
+pytest tests/v2/core/test_orchestrator.py -v
+
+# Test the Flow Handlers (business logic)
+pytest tests/v2/core/test_flow_handlers.py -v
+
+# Test the Flow Engine (FSM mechanics)
+pytest tests/v2/core/test_flow_engine.py -v
+```
+
+### 🎯 Test Categories
+
+```bash
+# Run only unit tests (fast, no external dependencies)
+pytest tests/v2/core/ -m unit -v
+
+# Run only integration tests (complete flows)
+pytest tests/v2/core/ -m integration -v
+
+# Run flow-specific tests
+pytest tests/v2/core/ -m flow -v
+
+# Run handler-specific tests
+pytest tests/v2/core/ -m handlers -v
+
+# Run orchestrator-specific tests
+pytest tests/v2/core/ -m orchestrator -v
+```
+
+### 🔍 Debugging Failed Tests
+
+```bash
+# Stop on first failure
+pytest tests/v2/core/ -x -v
+
+# Run only last failed tests
+pytest tests/v2/core/ --lf -v
+
+# Show local variables in tracebacks
+pytest tests/v2/core/ -l -v
+
+# Run with full traceback
+pytest tests/v2/core/ --tb=long -v
+
+# Run with pdb debugger on failure
+pytest tests/v2/core/ --pdb
+```
+
+### 📊 Recommended Test Sequence
+
+1. **Verify fixtures are working:**
+   ```bash
+   pytest tests/v2/core/conftest.py -v
+   ```
+
+2. **Run unit tests (should be fast):**
+   ```bash
+   pytest tests/v2/core/ -m unit -v
+   ```
+
+3. **Run integration tests:**
+   ```bash
+   pytest tests/v2/core/ -m integration -v
+   ```
+
+4. **Run full suite with coverage:**
+   ```bash
+   pytest tests/v2/core/ --cov=src/v2 --cov-report=term-missing -v
+   ```
+
+### 🎭 Demo and Showcase Tests
+
+```bash
+# Run demonstration tests with output
+pytest tests/v2/core/ -k "demo or showcase" -v -s
+
+# Run realistic conversation demo
+pytest tests/v2/core/test_orchestrator.py::TestOrchestratorDemo::test_realistic_conversation_showcase -v -s
+
+# Run handler demo
+pytest tests/v2/core/test_flow_handlers.py::TestHandlersDemo::test_realistic_conversation_handlers -v -s
+
+# Run FSM structure demo
+pytest tests/v2/core/test_flow_engine.py::TestFlowEngineDemo::test_fsm_structure_demo -v -s
+```
+
+### 📝 Generate Test Reports
+
+```bash
+# HTML test report
+pytest tests/v2/core/ --html=v2_test_report.html --self-contained-html
+
+# JUnit XML for CI/CD
+pytest tests/v2/core/ --junit-xml=v2_test_results.xml
+
+# Coverage HTML report
+pytest tests/v2/core/ --cov=src/v2 --cov-report=html
+# Then open htmlcov/index.html in browser
+
+# Coverage with missing lines
+pytest tests/v2/core/ --cov=src/v2 --cov-report=term-missing
+```
+
+### 🔧 Quick Test Commands
+
+```bash
+# Test single class
+pytest tests/v2/core/test_flow_handlers.py::TestGreetingHandler -v
+
+# Test single method
+pytest tests/v2/core/test_orchestrator.py::TestOrchestratorCore::test_orchestrator_initialization -v
+
+# Test by keyword in name
+pytest tests/v2/core/ -k "symptom" -v
+
+# Test happy path flows
+pytest tests/v2/core/ -k "happy_path" -v
+
+# Test error handling
+pytest tests/v2/core/ -k "error" -v
+```
+
+### ⚡ Performance Tests
+
+```bash
+# Run performance tests
+pytest tests/v2/core/ -k "performance" -v
+
+# Run with timing information
+pytest tests/v2/core/ --durations=10 -v
+```
+
+### 🔄 Continuous Testing
+
+```bash
+# Watch for changes and rerun tests (requires pytest-watch)
+ptw tests/v2/core/ -- -v
+
+# Run tests in parallel (requires pytest-xdist)
+pytest tests/v2/core/ -n auto -v
+```
+
+## Test Coverage Goals
+
+- **Unit Tests**: >90% coverage of business logic
+- **Integration Tests**: All major conversation flows
+- **Error Handling**: All error scenarios tested
+- **Performance**: Response times under 100ms for handlers
+
+## Troubleshooting
+
+### If tests fail:
+
+1. **Check environment:**
+   ```bash
+   python --version  # Should be 3.11+
+   pip list | grep pytest  # Verify pytest is installed
+   ```
+
+2. **Verify file structure:**
+   ```bash
+   ls tests/v2/core/  # Should show all test files
+   ls src/v2/  # Should show source files
+   ```
+
+3. **Check imports:**
+   ```bash
+   python -c "from src.v2.core.orchestrator import V2Orchestrator"
+   ```
+
+4. **Run with more debug info:**
+   ```bash
+   pytest tests/v2/core/ -vvv --tb=short
+   ```
+
+### Common Issues:
+
+- **Import errors**: Ensure you're running from project root
+- **Fixture errors**: Check conftest.py is in the correct location
+- **Async errors**: Ensure test methods are marked with `@pytest.mark.asyncio`
+
+## CI/CD Integration
+
+```yaml
+# Example GitHub Actions configuration
+- name: Run V2 Tests
+  run: |
+    pytest tests/v2/core/ \
+      --cov=src/v2 \
+      --cov-report=xml \
+      --junit-xml=test-results.xml \
+      -v
+```
+
+## Best Practices
+
+1. Run unit tests frequently during development
+2. Run integration tests before committing
+3. Check coverage reports to identify untested code
+4. Use demo tests to verify user-facing functionality
+5. Keep tests fast by using mocks properly
+
+## Test Writing Guidelines
+
+When adding new tests:
+
+1. Use appropriate markers (`@pytest.mark.unit`, etc.)
+2. Mock external dependencies
+3. Test both success and failure cases
+4. Include docstrings explaining test purpose
+5. Keep tests focused and independent
+
+## Related Documentation
+
+- `REFACTORING_PLAN.md` - Overall V2 architecture plan
+- `src/v2/README.md` - V2 implementation details
+- `tests/README.md` - General testing guidelines

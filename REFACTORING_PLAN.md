@@ -136,13 +136,13 @@ src/
 - [x] Implement flow handlers (Flow Handlers)
 - [x] Connect to v2 agents and services (Orchestrator)
 - [x] Create comprehensive flow tests
-- [ ] **COMMIT**: "feat: Complete v2 flow engine with FSM"
+- [x] **COMMIT**: "feat: Complete v2 flow engine with FSM"
 
 ### Phase 6: V2 Switch-over Preparation
-- [ ] Create new v2/main.py (independent FastAPI app)  
-- [ ] Create V2AgentMessage model (independent from V1)
-- [ ] Test complete V2 system end-to-end
-- [ ] **COMMIT**: "feat: V2 switch-over preparation"
+- [x] Create new v2/main.py (independent FastAPI app)  
+- [x] Create V2AgentMessage model (independent from V1)
+- [x] Test complete V2 system end-to-end
+- [x] **COMMIT**: "feat: V2 switch-over preparation"
 
 ### Phase 7: Switch-over Execution
 - [ ] Deploy V2 system

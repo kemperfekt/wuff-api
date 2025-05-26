@@ -1,13 +1,13 @@
 # tests/v2/core/conftest.py
 """
-Shared fixtures for V2 core component tests (Phase 5).
+Fixed shared fixtures for V2 core component tests.
 
-Provides mocked services, sample data, and utilities for testing
+Provides properly mocked services, sample data, and utilities for testing
 flow handlers, flow engine, and orchestrator.
 """
 
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from typing import Dict, Any, List
 
 from src.models.flow_models import FlowStep
@@ -22,7 +22,7 @@ def mock_gpt_service():
     mock = AsyncMock()
     
     # Default responses for different scenarios
-    def complete_side_effect(prompt, **kwargs):
+    async def complete_side_effect(prompt, **kwargs):
         if "jagd" in prompt.lower():
             return "Als Hund will ich jagen und verfolgen."
         elif "territorial" in prompt.lower():
@@ -46,7 +46,7 @@ def mock_weaviate_service():
     mock = AsyncMock()
     
     # Default search results
-    def vector_search_side_effect(query, collection_name=None, limit=3):
+    async def vector_search_side_effect(query, collection_name=None, limit=3):
         if collection_name == "Symptome":
             if "bellt" in query.lower():
                 return [
@@ -110,44 +110,57 @@ def mock_weaviate_service():
 
 @pytest.fixture
 def mock_redis_service():
-    """Mock RedisService for testing"""
-    mock = AsyncMock()
+    """Mock RedisService for testing with flexible argument handling"""
+    mock = Mock()  # Use regular Mock, not AsyncMock for Redis
     
     # Storage for testing
     redis_storage = {}
     
     def set_side_effect(*args, **kwargs):
-        """Handle set calls with flexible arguments - no unpacking errors"""
+        """Handle set calls with maximum flexibility"""
         try:
-            # Handle both positional and keyword arguments safely
-            if len(args) >= 2:
-                key = args[0]  
-                value = args[1]
-                expire = args[2] if len(args) > 2 else kwargs.get('expire')
-            elif len(args) == 1:
-                key = args[0]
-                value = kwargs.get('value', {})
-                expire = kwargs.get('expire')
-            else:
-                # Fallback - just return True
+            # Initialize variables
+            key = None
+            value = None
+            expire = None
+            
+            # Try to extract from positional arguments
+            if args:
+                if len(args) >= 1:
+                    key = args[0]
+                if len(args) >= 2:
+                    value = args[1]
+                if len(args) >= 3:
+                    expire = args[2]
+            
+            # Override with keyword arguments if present
+            key = kwargs.get('key', key)
+            value = kwargs.get('value', value)
+            expire = kwargs.get('expire', expire)
+            
+            # Store if we have at least key and value
+            if key is not None and value is not None:
+                redis_storage[key] = {"value": value, "expire": expire}
                 return True
             
-            redis_storage[key] = {"value": value, "expire": expire}
+            # Default success even if no valid args
             return True
+            
         except Exception as e:
-            # If anything goes wrong, just return True (successful mock)
             print(f"Redis mock set error (ignored): {e}")
             return True
     
-    def get_side_effect(key):
+    def get_side_effect(key, **kwargs):
+        """Handle get calls"""
         try:
-            return redis_storage.get(key, {}).get("value")
-        except:
+            stored = redis_storage.get(key, {})
+            return stored.get("value")
+        except Exception:
             return None
     
-    mock.set.side_effect = set_side_effect
-    mock.get.side_effect = get_side_effect  
-    mock.health_check.return_value = {"healthy": True}
+    mock.set = Mock(side_effect=set_side_effect)
+    mock.get = Mock(side_effect=get_side_effect)
+    mock.health_check = Mock(return_value={"healthy": True})
     
     return mock
 
@@ -201,10 +214,11 @@ def mock_prompt_manager():
 
 @pytest.fixture
 def mock_dog_agent():
-    """Mock DogAgent for testing"""
+    """Mock DogAgent for testing - always returns lists"""
     mock = AsyncMock()
     
-    def respond_side_effect(context):
+    async def respond_side_effect(context):
+        # Always return a list of messages, never None
         if context.message_type == MessageType.GREETING:
             return [
                 V2AgentMessage(sender="dog", text="Wuff! Hallo!", message_type="greeting"),
@@ -218,12 +232,17 @@ def mock_dog_agent():
                 return [V2AgentMessage(sender="dog", text="Ich erkenne territorialen Instinkt.", message_type="response")]
             elif response_mode == 'exercise':
                 return [V2AgentMessage(sender="dog", text="Übe Impulskontrolle.", message_type="response")]
+            else:
+                return [V2AgentMessage(sender="dog", text="Standard response", message_type="response")]
         elif context.message_type == MessageType.QUESTION:
             question_type = context.metadata.get('question_type', 'confirmation')
             return [V2AgentMessage(sender="dog", text=f"{question_type.title()} Frage?", message_type="question")]
         elif context.message_type == MessageType.ERROR:
             return [V2AgentMessage(sender="dog", text="Es tut mir leid.", message_type="error")]
+        elif context.message_type == MessageType.INSTRUCTION:
+            return [V2AgentMessage(sender="dog", text="Bitte mehr Details.", message_type="instruction")]
         
+        # Default fallback - always return at least one message
         return [V2AgentMessage(sender="dog", text="Standard Antwort", message_type="response")]
     
     mock.respond.side_effect = respond_side_effect
@@ -234,10 +253,11 @@ def mock_dog_agent():
 
 @pytest.fixture
 def mock_companion_agent():
-    """Mock CompanionAgent for testing"""
+    """Mock CompanionAgent for testing - always returns lists"""
     mock = AsyncMock()
     
-    def respond_side_effect(context):
+    async def respond_side_effect(context):
+        # Always return a list of messages, never None
         if context.message_type == MessageType.GREETING:
             return [V2AgentMessage(sender="companion", text="Feedback bitte!", message_type="greeting")]
         elif context.message_type == MessageType.QUESTION:
@@ -249,7 +269,10 @@ def mock_companion_agent():
                 return [V2AgentMessage(sender="companion", text="Danke.", message_type="response")]
             elif response_mode == 'completion':
                 return [V2AgentMessage(sender="companion", text="Feedback komplett! 🐾", message_type="response")]
+            else:
+                return [V2AgentMessage(sender="companion", text="OK", message_type="response")]
         
+        # Default fallback - always return at least one message
         return [V2AgentMessage(sender="companion", text="Standard Companion Antwort", message_type="response")]
     
     mock.respond.side_effect = respond_side_effect
@@ -408,6 +431,33 @@ def test_utils():
     return TestUtils
 
 
+# Fully mocked orchestrator fixture for integration tests
+@pytest.fixture
+def fully_mocked_orchestrator(sample_session_store, mock_services_bundle, mock_agents_bundle):
+    """Create a fully mocked orchestrator for testing"""
+    from src.v2.core.orchestrator import V2Orchestrator
+    from src.v2.core.flow_engine import FlowEngine
+    from src.v2.core.flow_handlers import FlowHandlers
+    
+    # Create mocked flow handlers with all services
+    mock_handlers = FlowHandlers(
+        dog_agent=mock_agents_bundle['dog_agent'],
+        companion_agent=mock_agents_bundle['companion_agent'],
+        **mock_services_bundle
+    )
+    
+    # Create flow engine with mocked handlers
+    mock_engine = FlowEngine(mock_handlers)
+    
+    # Create orchestrator with mocks
+    orchestrator = V2Orchestrator(
+        session_store=sample_session_store,
+        flow_engine=mock_engine
+    )
+    
+    return orchestrator
+
+
 # Markers for different test categories
 def pytest_configure(config):
     """Configure custom pytest markers"""
@@ -426,3 +476,28 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "orchestrator: marks tests as orchestrator-specific tests"
     )
+
+
+# Additional helper fixtures
+@pytest.fixture
+def mock_flow_engine():
+    """Mock FlowEngine for isolated testing"""
+    from src.v2.core.flow_engine import FlowEngine, FlowEvent
+    
+    mock = AsyncMock(spec=FlowEngine)
+    mock.classify_user_input.return_value = FlowEvent.USER_INPUT
+    mock.process_event.return_value = (
+        FlowStep.WAIT_FOR_SYMPTOM,
+        [V2AgentMessage(sender="dog", text="Test", message_type="response")]
+    )
+    mock.get_valid_transitions.return_value = []
+    mock.get_flow_summary.return_value = {
+        "total_states": 10,
+        "total_transitions": 25,
+        "states": ["greeting", "wait_for_symptom"],
+        "events": ["user_input", "yes_response"],
+        "transitions": []
+    }
+    mock.validate_fsm.return_value = []
+    
+    return mock

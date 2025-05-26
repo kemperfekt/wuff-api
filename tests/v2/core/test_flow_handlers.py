@@ -1,14 +1,6 @@
 # tests/v2/core/test_flow_handlers.py
 """
-Comprehensive tests for V2 FlowHandlers - Business logic implementation.
-
-Tests cover:
-- Individual handler business logic
-- Service integration (GPT, Weaviate, Redis)  
-- Agent coordination (Dog, Companion)
-- Error handling and fallbacks
-- Data flow and state management
-- Real conversation scenarios
+Fixed V2 FlowHandlers tests with proper mocking and error handling.
 """
 
 import pytest
@@ -390,8 +382,13 @@ class TestFeedbackHandlers:
         
         # Check save data structure
         save_args = mock_services_bundle['redis_service'].set.call_args
-        key = save_args[0][0]
-        data = save_args[0][1]
+        # Handle both positional and keyword arguments
+        if save_args[0]:  # Positional args
+            key = save_args[0][0]
+            data = save_args[0][1]
+        else:  # Keyword args
+            key = save_args[1]['key']
+            data = save_args[1]['value']
         
         assert key.startswith("feedback:")
         assert data['session_id'] == sample_session.session_id
@@ -498,10 +495,8 @@ class TestBusinessLogic:
     @pytest.mark.asyncio
     async def test_instinct_analysis_logic(self, mock_services_bundle):
         """Test instinct analysis business logic"""
-        handlers = FlowHandlers(
-            redis_service=mock_redis,
-            **{k: v for k, v in mock_services_bundle.items() if k != 'redis_service'}
-        )
+        # Use the services bundle properly
+        handlers = FlowHandlers(**mock_services_bundle)
         
         # Execute instinct analysis
         result = await handlers._analyze_instincts(
@@ -572,8 +567,19 @@ class TestBusinessLogic:
         mock_services_bundle['redis_service'].set.assert_called_once()
         save_args = mock_services_bundle['redis_service'].set.call_args
         
+        # Handle both positional and keyword arguments
+        if save_args[0]:  # Positional args
+            if len(save_args[0]) >= 3:
+                key, data, expire = save_args[0][0], save_args[0][1], save_args[0][2]
+            else:
+                key, data = save_args[0][0], save_args[0][1]
+                expire = save_args[1].get('expire', None)
+        else:  # Keyword args
+            key = save_args[1]['key']
+            data = save_args[1]['value']
+            expire = save_args[1].get('expire', None)
+        
         # Verify data structure
-        key, data, expire = save_args[0]
         assert key == f"feedback:{sample_session.session_id}"
         assert data['session_id'] == sample_session.session_id
         assert data['symptom'] == "test verhalten"
@@ -598,30 +604,6 @@ class TestBusinessLogic:
         description = handlers._extract_description(gpt_response)
         assert len(description) > 10
         assert description.endswith("Schutzinstinkt")
-    
-    @pytest.mark.asyncio
-    async def test_feedback_save_logic_minimal(self, sample_session):
-        """Test feedback saving with direct mock - no conftest dependencies"""
-        # Setup session with feedback
-        sample_session.feedback = ["Antwort 1", "Antwort 2", "Antwort 3"]
-        sample_session.active_symptom = "test verhalten"
-        
-        # Create a simple mock Redis service directly
-        from unittest.mock import Mock
-        mock_redis = Mock()
-        mock_redis.set.return_value = True
-        
-        # Create handlers with minimal dependencies
-        handlers = FlowHandlers(redis_service=mock_redis)
-        
-        # Execute the save method
-        success = await handlers._save_feedback(sample_session)
-        
-        # Basic verification
-        assert success is True
-        assert mock_redis.set.called is True
-        
-        print("✅ Minimal feedback save test passed!")
 
 
 # ===========================================
@@ -761,6 +743,7 @@ class TestHandlersDemo:
         
         # Realistic dog responses
         def dog_respond_side_effect(context):
+            # Always return a list, never None
             if context.message_type == MessageType.GREETING:
                 return [
                     V2AgentMessage(sender="dog", text="🐾 Wuff! Ich bin dein Hund!", message_type="greeting"),
@@ -781,12 +764,14 @@ class TestHandlersDemo:
                 elif question_type == 'exercise':
                     return [V2AgentMessage(sender="dog", text="Soll ich dir eine Übung zeigen?", message_type="question")]
             
+            # Always return at least one message
             return [V2AgentMessage(sender="dog", text="Wuff!", message_type="response")]
         
         realistic_dog_agent.respond.side_effect = dog_respond_side_effect
         
         # Realistic companion responses
         def companion_respond_side_effect(context):
+            # Always return a list, never None
             if context.message_type == MessageType.QUESTION:
                 question_num = context.metadata.get('question_number', 1)
                 questions = [
@@ -804,6 +789,7 @@ class TestHandlersDemo:
                 else:
                     return [V2AgentMessage(sender="companion", text="Danke für deine Antwort!", message_type="response")]
             
+            # Always return at least one message
             return [V2AgentMessage(sender="companion", text="Danke!", message_type="response")]
         
         realistic_companion_agent.respond.side_effect = companion_respond_side_effect
@@ -824,12 +810,8 @@ class TestHandlersDemo:
         # 1. Greeting
         print("\n1. Begrüßung")
         greeting_messages = await handlers.handle_greeting(session, "", {})
-        # Check for messages (may be empty list)
-        if greeting_messages:
-            for msg in greeting_messages:
-                print(f"   🐕 {msg.sender}: {msg.text}")
-        else:
-            print("   🐕 [Keine Nachrichten generiert]")
+        for msg in greeting_messages:
+            print(f"   🐕 {msg.sender}: {msg.text}")
         
         # 2. Symptom Input  
         print("\n2. Symptom Eingabe")
@@ -839,9 +821,8 @@ class TestHandlersDemo:
             "Mein Hund bellt immer wenn es an der Tür klingelt",
             {}
         )
-        if symptom_messages:
-            for msg in symptom_messages:
-                print(f"   🐕 {msg.sender}: {msg.text}")
+        for msg in symptom_messages:
+            print(f"   🐕 {msg.sender}: {msg.text}")
         print(f"   → Event: {next_event}")
         
         # 3. Context Input
@@ -852,81 +833,43 @@ class TestHandlersDemo:
             "Besonders laut und aggressiv bei fremden Menschen",
             {}
         )
-        if context_messages:
-            for msg in context_messages:
-                print(f"   🐕 {msg.sender}: {msg.text}")
+        for msg in context_messages:
+            print(f"   🐕 {msg.sender}: {msg.text}")
         
         # 4. Exercise Request
         print("\n4. Übungs-Anfrage")
         print("   👤 Benutzer: ja")
         exercise_messages = await handlers.handle_exercise_request(session, "ja", {})
-        if exercise_messages:
-            for msg in exercise_messages:
-                print(f"   🐕 {msg.sender}: {msg.text}")
+        for msg in exercise_messages:
+            print(f"   🐕 {msg.sender}: {msg.text}")
         
         # 5. Feedback Sample
         print("\n5. Feedback Sammlung")
         feedback_q1 = await handlers.handle_feedback_question(session, "", {'question_number': 1})
-        if feedback_q1:
-            for msg in feedback_q1:
-                print(f"   🤝 {msg.sender}: {msg.text}")
+        for msg in feedback_q1:
+            print(f"   🤝 {msg.sender}: {msg.text}")
         
         print("   👤 Benutzer: Ja, sehr hilfreich!")
         await handlers.handle_feedback_answer(session, "Ja, sehr hilfreich!", {})
         
         completion_msgs = await handlers.handle_feedback_completion(session, "test@demo.com", {})
-        if completion_msgs:
-            for msg in completion_msgs:
-                print(f"   🤝 {msg.sender}: {msg.text}")
+        for msg in completion_msgs:
+            print(f"   🤝 {msg.sender}: {msg.text}")
         
         print("\n✅ Handler Demo abgeschlossen!")
-        print(f"   Session Feedback: {len(getattr(session, 'feedback', [])) or 0} Antworten gespeichert")
-        print(f"   Aktives Symptom: {getattr(session, 'active_symptom', 'Kein Symptom')}")
+        print(f"   Session Feedback: {len(session.feedback)} Antworten gespeichert")
+        print(f"   Aktives Symptom: {session.active_symptom}")
         
-        # Verify basic functionality (don't assert on specific counts due to mocking)
+        # Verify basic functionality
         assert next_event in ["symptom_found", "symptom_not_found"]
         assert hasattr(session, 'active_symptom')
+        assert len(greeting_messages) > 0
+        assert len(symptom_messages) > 0
+        assert len(context_messages) > 0
+        assert len(exercise_messages) > 0
 
 
-@pytest.fixture
-def mock_redis_service():
-    """Mock RedisService for testing"""
-    mock = AsyncMock()
-    
-    # Storage for testing
-    redis_storage = {}
-    
-    def set_side_effect(*args, **kwargs):
-        """Handle set calls with flexible arguments - no unpacking errors"""
-        try:
-            # Handle both positional and keyword arguments safely
-            if len(args) >= 2:
-                key = args[0]  
-                value = args[1]
-                expire = args[2] if len(args) > 2 else kwargs.get('expire')
-            elif len(args) == 1:
-                key = args[0]
-                value = kwargs.get('value', {})
-                expire = kwargs.get('expire')
-            else:
-                # Fallback - just return True
-                return True
-            
-            redis_storage[key] = {"value": value, "expire": expire}
-            return True
-        except Exception as e:
-            # If anything goes wrong, just return True (successful mock)
-            print(f"Redis mock set error (ignored): {e}")
-            return True
-    
-    def get_side_effect(key):
-        try:
-            return redis_storage.get(key, {}).get("value")
-        except:
-            return None
-    
-    mock.set.side_effect = set_side_effect
-    mock.get.side_effect = get_side_effect
-    mock.health_check.return_value = {"healthy": True}
-    
-    return mock
+if __name__ == "__main__":
+    print("🧪 Fixed V2 FlowHandlers Test Suite")
+    print("   Run: pytest tests/v2/core/test_flow_handlers.py -v")
+    print("   All handler tests properly mocked and fixed")
