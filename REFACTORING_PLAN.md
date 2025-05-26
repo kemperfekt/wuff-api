@@ -135,7 +135,7 @@ src/
 - [x] Define all state transitions in FSM (Flow Engine)
 - [x] Implement flow handlers (Flow Handlers)
 - [x] Connect to v2 agents and services (Orchestrator)
-- [ ] Create comprehensive flow tests
+- [x] Create comprehensive flow tests
 - [ ] **COMMIT**: "feat: Complete v2 flow engine with FSM"
 
 ### Phase 6: V2 Switch-over Preparation
@@ -267,12 +267,13 @@ RUN_INTEGRATION_TESTS=false
 - [ ] Response time ≤ current implementation
 - [ ] Error rate < 1%
 
-## Notes & Decisions
+## Motivation
 - **Why FSM**: Current hardcoded flow is brittle and hard to modify
 - **Why Async Services**: Consistency and better performance
 - **Why Prompt Centralization**: Easy fine-tuning and A/B testing
 - **Why Mock-First Testing**: Faster tests, no API costs, deterministic results
 - **Strategy Change**: Switch-over instead of gradual migration
+
 
 ## Session Log
 <!-- Update this after each work session -->
@@ -298,19 +299,21 @@ RUN_INTEGRATION_TESTS=false
 - Weaviate Service
 
 ### Session 5 - May 25, 2025
-✅ Clean Separation Achieved: Agents only handle message formatting
-✅ PromptManager Integration: All content comes from centralized prompts
-✅ Comprehensive Testing: All message types, response modes, validation, error handling
-✅ Working Demos: Interactive examples showing real usage patterns
-✅ Mock-First Testing: Fast, reliable tests without external dependencies
----
+- Clean Separation Achieved: Agents only handle message formatting
+- PromptManager Integration: All content comes from centralized prompts
+- Comprehensive Testing: All message types, response modes, validation, error handling
+- Working Demos: Interactive examples showing real usage patterns
+- Mock-First Testing: Fast, reliable tests without external dependencies
+
 
 ### Session 6 - May 26, 2025
-[x] Review Agent code
-[x] Refactor tests
+- Review Agent code
+- Refactor Agent tests
+- Review Flow Engine, Flow Handlers & Orchestrator
+- Refine tests for Engine, Handlers & Orchestrator
 
-## For Opus to clean up
-[ ] test_orchestrator.py
-[ ] test_flow_handlers.py
+## For Opus to clean after the party
+[ ] test_orchestrator.py (5 failures)
+[ ] test_flow_handlers.py (3 failures)
 
 **Remember to update and commit this file after each significant step!**
