@@ -11,7 +11,10 @@ All content is in German as per the application requirements.
 # ============================================================================
 
 # Initial greeting when conversation starts
-GREETING = """Hallo! Schön, dass Du da bist. Ich erkläre Dir Hundeverhalten aus der Hundeperspektive. Bitte beschreibe ein Verhalten oder eine Situation!"""
+GREETING = """Hallo! Schön, dass Du da bist. Ich erkläre Dir Hundeverhalten aus der Hundeperspektive."""
+
+# Follow-up question to invite behavior description
+GREETING_FOLLOWUP = """Erzähl mal, was ist denn bei euch los?"""
 
 # When user input is too short or unclear
 NEED_MORE_DETAIL = """Kannst Du das Verhalten bitte etwas ausführlicher beschreiben?"""

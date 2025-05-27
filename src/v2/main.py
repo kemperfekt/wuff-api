@@ -205,6 +205,48 @@ async def get_flow_debug_info():
             status_code=500,
             detail=f"Fehler beim Abrufen der Flow-Debug-Informationen: {str(e)}"
         )
+    
+@app.get("/v2/debug/prompts")
+async def get_prompt_debug_info():
+    """
+    Get debug information about loaded prompts.
+    
+    This endpoint shows all loaded prompts and their keys.
+    """
+    from src.v2.core.prompt_manager import get_prompt_manager, PromptCategory
+    
+    try:
+        pm = get_prompt_manager()
+        
+        # Get all prompts by category
+        prompts_by_category = {}
+        for category in PromptCategory:
+            prompts_by_category[category.value] = pm.list_prompts(category)
+        
+        # Try to get the specific greeting prompts
+        greeting_debug = {}
+        try:
+            greeting_debug["dog.greeting"] = pm.get("dog.greeting")[:50] + "..."
+        except Exception as e:
+            greeting_debug["dog.greeting"] = f"ERROR: {e}"
+            
+        try:
+            greeting_debug["dog.greeting.followup"] = pm.get("dog.greeting.followup")[:50] + "..."
+        except Exception as e:
+            greeting_debug["dog.greeting.followup"] = f"ERROR: {e}"
+        
+        return {
+            "total_prompts": len(pm.prompts),
+            "prompts_by_category": prompts_by_category,
+            "greeting_debug": greeting_debug,
+            "all_dog_prompts": [k for k in pm.prompts.keys() if k.startswith("dog.")]
+        }
+    except Exception as e:
+        logger.error(f"[V2] Error getting prompt debug info: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fehler beim Abrufen der Prompt-Debug-Informationen: {str(e)}"
+        )
 
 
 # Startup event for initialization

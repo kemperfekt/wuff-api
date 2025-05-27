@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Any
 from src.v2.agents.base_agent import BaseAgent, AgentContext, MessageType, V2AgentMessage
 from src.v2.core.prompt_manager import PromptType
 from src.v2.core.exceptions import V2AgentError, V2ValidationError
+from src.v2.core.prompt_manager import PromptType, PromptCategory
 
 
 class DogAgent(BaseAgent):
@@ -91,55 +92,55 @@ class DogAgent(BaseAgent):
             # Fallback to error message if anything goes wrong
             return [self.create_error_message(str(e))]
     
- async def _handle_greeting(self, context: AgentContext) -> List[V2AgentMessage]:
-    """
-    Generate greeting messages from dog perspective.
-    
-    Args:
-        context: Agent context
+    async def _handle_greeting(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate greeting messages from dog perspective.
         
-    Returns:
-        List of greeting messages
-    """
-    try:
-        # Debug: List available prompts
-        print(f"DEBUG: Available dog prompts: {self.prompt_manager.list_prompts(PromptCategory.DOG)}")
-        
-        # Try to get greeting prompts with fallbacks
+        Args:
+            context: Agent context
+            
+        Returns:
+            List of greeting messages
+        """
         try:
-            greeting_text = self.prompt_manager.get_prompt(PromptType.DOG_GREETING)
+            # Debug: List available prompts
+            print(f"DEBUG: Available dog prompts: {self.prompt_manager.list_prompts(PromptCategory.DOG)}")
+            
+            # Try to get greeting prompts with fallbacks
+            try:
+                greeting_text = self.prompt_manager.get_prompt(PromptType.DOG_GREETING)
+            except Exception as e:
+                print(f"DEBUG: Failed to get DOG_GREETING: {e}")
+                # Fallback greeting
+                greeting_text = "Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe."
+            
+            try:
+                follow_up_text = self.prompt_manager.get_prompt(PromptType.DOG_GREETING_FOLLOWUP)
+            except Exception as e:
+                print(f"DEBUG: Failed to get DOG_GREETING_FOLLOWUP: {e}")
+                # Fallback follow-up
+                follow_up_text = "Beschreib mir bitte, was du beobachtet hast."
+            
+            return [
+                self.create_message(greeting_text, MessageType.GREETING),
+                self.create_message(follow_up_text, MessageType.QUESTION)
+            ]
+            
         except Exception as e:
-            print(f"DEBUG: Failed to get DOG_GREETING: {e}")
-            # Fallback greeting
-            greeting_text = "Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe."
-        
-        try:
-            follow_up_text = self.prompt_manager.get_prompt(PromptType.DOG_GREETING_FOLLOWUP)
-        except Exception as e:
-            print(f"DEBUG: Failed to get DOG_GREETING_FOLLOWUP: {e}")
-            # Fallback follow-up
-            follow_up_text = "Was ist los? Beschreib mir bitte, was du beobachtet hast."
-        
-        return [
-            self.create_message(greeting_text, MessageType.GREETING),
-            self.create_message(follow_up_text, MessageType.QUESTION)
-        ]
-        
-    except Exception as e:
-        print(f"ERROR in _handle_greeting: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return fallback messages instead of raising
-        return [
-            self.create_message(
-                "Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe.",
-                MessageType.GREETING
-            ),
-            self.create_message(
-                "Was ist los? Beschreib mir bitte, was du beobachtet hast.",
-                MessageType.QUESTION
-            )
-        ]
+            print(f"ERROR in _handle_greeting: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return fallback messages instead of raising
+            return [
+                self.create_message(
+                    "Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe.",
+                    MessageType.GREETING
+                ),
+                self.create_message(
+                    "Was ist los? Beschreib mir bitte, was du beobachtet hast.",
+                    MessageType.QUESTION
+                )
+            ]
     
     async def _handle_response(self, context: AgentContext) -> List[V2AgentMessage]:
         """
