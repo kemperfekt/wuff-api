@@ -145,7 +145,8 @@ src/
 - [x] **COMMIT**: "feat: V2 switch-over preparation"
 
 ### Phase 7: Switch-over Execution
-- [ ] Deploy V2 system
+- [x] Deploy V2 system
+- [ ] Happy Path Bugs fixed
 - [ ] Switch DNS/routing to V2
 - [ ] Monitor for issues
 - [ ] Keep V1 as backup (git tag)
@@ -315,5 +316,6 @@ RUN_INTEGRATION_TESTS=false
 ## For Opus to clean after the party
 [ ] test_orchestrator.py (5 failures)
 [ ] test_flow_handlers.py (3 failures)
+[ ] V2 is using the V1 flow_models.py (imported as from src.models.flow_models import FlowStep)
 
 **Remember to update and commit this file after each significant step!**

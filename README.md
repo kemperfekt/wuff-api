@@ -302,7 +302,7 @@ graph TB
     subgraph "External Services"
         WV[Weaviate Cloud<br/>Vector DB]
         OAI[OpenAI API<br/>GPT-4]
-        RD[Redis Cloud<br/>Clever Cloud]
+        RD[Redis Cloud<br/>Scalingo]
     end
     
     subgraph "User Access"

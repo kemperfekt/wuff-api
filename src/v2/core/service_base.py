@@ -109,7 +109,7 @@ class BaseService(ABC, Generic[ConfigType]):
             raise ServiceError(
                 service_name=self.service_name,
                 message=error_msg,
-                original_error=e
+                details={'original_error': str(e), 'error_type': type(e).__name__}
             )
     
     def _validate_config(self) -> None:

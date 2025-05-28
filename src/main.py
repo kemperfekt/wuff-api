@@ -5,9 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from src.state.session_state import SessionStore
 from src.flow.flow_orchestrator import handle_message, init_orchestrator
-from src.models.flow_models import AgentMessage
-from src.models.flow_models import FlowStep
-from src.core.config import setup_logging, logger
+from src.v2.models.flow_models import AgentMessage, FlowStep
+from src.v2.core.config import setup_logging, logger
 
 app = FastAPI()
 

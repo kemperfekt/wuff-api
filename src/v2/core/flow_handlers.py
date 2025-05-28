@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Any, Tuple
 import logging
 from datetime import datetime, timezone
 
-from src.state.session_state import SessionState
+from src.v2.models.session_state import SessionState
 from src.v2.agents.dog_agent import DogAgent
 from src.v2.agents.companion_agent import CompanionAgent
 from src.v2.agents.base_agent import AgentContext, MessageType, V2AgentMessage
@@ -111,120 +111,159 @@ class FlowHandlers:
                 message=f"Failed to generate greeting: {str(e)}"
             ) from e
     
-    async def handle_symptom_input(
-        self, 
-        session: SessionState, 
-        user_input: str, 
-        context: Dict[str, Any]
-    ) -> Tuple[str, List[V2AgentMessage]]:
-        """
-        Handle symptom input - analyze behavior and generate dog perspective.
-        
-        This is the core business logic that:
-        1. Searches for symptom in vector database
-        2. Analyzes behavior with AI
-        3. Generates dog perspective response
-        
-        Args:
-            session: Current session state
-            user_input: User's symptom description
-            context: Additional context data
-            
-        Returns:
-            Tuple of (next_event, messages)
-            - next_event: "symptom_found" or "symptom_not_found"
-            - messages: Dog agent responses
-        """
+    async def handle_symptom_input(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+        """Handle user's symptom description with semantic search"""
         logger.info(f"Handling symptom input: '{user_input[:50]}...'")
         
+        # Validate input length
+        if len(user_input) < 10:
+            logger.info(f"Input too short ({len(user_input)} chars): '{user_input}'")
+            return await self.dog_agent.respond(AgentContext(
+                session_id=session.session_id,
+                user_input=user_input,
+                message_type=MessageType.INSTRUCTION,
+                metadata={"instruction_type": "describe_more"}
+            ))
+        
         try:
-            # Validate input length
-            if len(user_input.strip()) < 10:
-                # Input too short - ask for more detail
-                agent_context = AgentContext(
-                    session_id=session.session_id,
-                    user_input=user_input,
-                    message_type=MessageType.INSTRUCTION,
-                    metadata={'instruction_type': 'describe_more'}
-                )
-                
-                messages = await self.dog_agent.respond(agent_context)
-                return "symptom_not_found", messages
-            
-            # Store symptom in session
-            session.active_symptom = user_input.strip()
-            
-            # Search for similar symptoms in vector database
-            search_results = await self.weaviate_service.vector_search(
+            # Use semantic search to find matching symptoms
+            results = await self.weaviate_service.search(
+                collection="Symptome",
                 query=user_input,
-                collection_name="Symptome",
-                limit=3
+                limit=3,  # Get top 3 for better logging
+                properties=["symptom_name", "schnelldiagnose"],
+                return_metadata=True
             )
             
-            if search_results and len(search_results) > 0:
-                # Found matching symptoms - generate dog perspective
+            # Log search results for analysis
+            if results:
+                top_score = results[0]['metadata'].get('distance', 'unknown')
+                logger.info(f"Symptom search - Query: '{user_input}', Results: {len(results)}, Top score: {top_score}")
                 
-                # Get best match data
-                best_match = search_results[0]
-                match_data = best_match.get('text', '')
-                match_score = best_match.get('score', 0.0)
-                
-                logger.info(f"Found symptom match with score {match_score}")
-                
-                # Create context for dog agent
-                agent_context = AgentContext(
-                    session_id=session.session_id,
-                    user_input=user_input,
-                    message_type=MessageType.RESPONSE,
-                    metadata={
-                        'response_mode': 'perspective_only',
-                        'match_data': match_data,
-                        'match_score': match_score
-                    }
-                )
-                
-                # Generate dog perspective
-                messages = await self.dog_agent.respond(agent_context)
-                
-                # Add confirmation question
-                confirmation_context = AgentContext(
-                    session_id=session.session_id,
-                    message_type=MessageType.QUESTION,
-                    metadata={'question_type': 'confirmation'}
-                )
-                
-                confirmation_messages = await self.dog_agent.respond(confirmation_context)
-                messages.extend(confirmation_messages)
-                
-                return "symptom_found", messages
-                
+                # Log all matches for debugging
+                for i, result in enumerate(results[:3]):
+                    distance = result['metadata'].get('distance', 'unknown')
+                    symptom_name = result['properties'].get('symptom_name', '')[:50]
+                    logger.debug(f"  Match {i+1}: distance={distance}, symptom_name='{symptom_name}...'")
             else:
-                # No matching symptoms found
-                logger.info("No matching symptoms found in database")
+                logger.info(f"Symptom search - Query: '{user_input}', Results: 0, Top score: no match")
+            
+            # Check if we have a good match
+            # Note: Lower distance = better match in Weaviate
+            if results and results[0]['metadata'].get('distance', 1.0) < 0.4:  # Threshold can be tuned
+                match_found = True
+                # Use schnelldiagnose (quick diagnosis) from the matched symptom
+                match_data = results[0]['properties'].get('schnelldiagnose', '')
                 
-                agent_context = AgentContext(
-                    session_id=session.session_id,
-                    user_input=user_input,
-                    message_type=MessageType.ERROR,
-                    metadata={'error_type': 'no_match'}
-                )
+                # Store match distance in session
+                session.match_distance = results[0]['metadata'].get('distance')
                 
-                messages = await self.dog_agent.respond(agent_context)
-                return "symptom_not_found", messages
+                logger.info(f"Good match found with distance {session.metadata['match_distance']}")
+            else:
+                match_found = False
+                match_data = None
+                logger.info("No good match found (distance too high or no results)")
                 
         except Exception as e:
-            logger.error(f"Error in symptom input handler: {e}")
+            logger.error(f"Error in symptom search: {e}", exc_info=True)
+            match_found = False
+            match_data = None
+        
+        # Store symptom in state
+        session.active_symptom = user_input
+        
+        if match_found and match_data:
+            # Generate dog perspective with match
+            messages = await self.dog_agent.respond(AgentContext(
+                session_id=session.session_id,
+                user_input=user_input,
+                message_type=MessageType.RESPONSE,
+                metadata={
+                    "response_mode": "perspective_only",
+                    "match_data": match_data
+                }
+            ))
             
-            # Generate error message
-            agent_context = AgentContext(
+            # Add confirmation question
+            messages.extend(await self.dog_agent.respond(AgentContext(
+                session_id=session.session_id,
+                user_input="",
+                message_type=MessageType.QUESTION,
+                metadata={"question_type": "confirmation"}
+            )))
+            
+            # Transition to wait for confirmation
+            return (FlowStep.WAIT_FOR_CONFIRMATION, messages)
+        else:
+            # No match found - ask to try again
+            logger.info("Symptom not found, staying in WAIT_FOR_SYMPTOM")
+            messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input=user_input,
                 message_type=MessageType.ERROR,
-                metadata={'error_type': 'technical'}
-            )
+                metadata={"error_type": "no_match"}
+            ))
             
-            messages = await self.dog_agent.respond(agent_context)
-            return "symptom_not_found", messages
+            # Stay in current state
+            return ('symptom_not_found', messages)
+        
+
+    async def handle_confirmation(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+        """Handle user's confirmation response with match tracking"""
+        logger.info(f"Handling confirmation response: '{user_input}'")
+        
+        # Normalize input for checking
+        normalized_input = user_input.lower().strip()
+        
+        # Log the confirmation result for match quality analysis
+        if "ja" in normalized_input or "yes" in normalized_input:
+            confirmed = True
+            match_distance = session.match_distance if session.match_distance is not None else 'unknown'
+            logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: yes, Distance: {match_distance}")
+            
+            # Transition to context gathering
+            session.current_step = FlowStep.WAIT_FOR_CONTEXT
+            messages = await self.dog_agent.respond(AgentContext(
+                session_id=session.session_id,
+                user_input="",
+                message_type=MessageType.QUESTION,
+                metadata={"question_type": "context"}
+            ))
+            
+            return (FlowStep.WAIT_FOR_CONTEXT, messages)
+            
+        elif "nein" in normalized_input or "no" in normalized_input:
+            confirmed = False
+            match_distance = session.match_distance if session.match_distance is not None else 'unknown'
+            logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: no, Distance: {match_distance}")
+            
+            # Transition to end or restart
+            session.current_step = FlowStep.END_OR_RESTART
+            messages = await self.dog_agent.respond(AgentContext(
+                session_id=session.session_id,
+                user_input="",
+                message_type=MessageType.RESPONSE,
+                metadata={
+                    "response_mode": "perspective_only",
+                    "match_data": "Okay, kein Problem. Wenn du es dir anders überlegst, sag einfach Bescheid."
+                }
+            ))
+            
+            return (FlowStep.END_OR_RESTART, messages)
+            
+        else:
+            # Invalid response - ask for clarification
+            logger.info(f"Invalid confirmation response: '{user_input}'")
+            messages = await self.dog_agent.respond(AgentContext(
+                session_id=session.session_id,
+                user_input="",
+                message_type=MessageType.INSTRUCTION,
+                metadata={"instruction_type": "be_specific"}
+            ))
+        
+        # Stay in current state
+        return (session.current_step, messages)
+        
     
     async def handle_context_input(
         self, 

@@ -10,17 +10,17 @@ Clean, async-only wrapper around Weaviate vector database with:
 - Health checks
 """
 import os
-from typing import Optional, Dict, Any, List, Union
-from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
 import logging
 import weaviate
 from weaviate.client import WeaviateClient
-from weaviate.classes.init import Auth
+from weaviate.classes.init import Auth, AdditionalConfig, Timeout
 from weaviate.classes.query import MetadataQuery
 
 from src.v2.core.service_base import BaseService, ServiceConfig
 from src.v2.core.exceptions import (
-    WeaviateServiceError,
+    V2ServiceError,
     ConfigurationError,
     ValidationError
 )
@@ -34,7 +34,7 @@ class WeaviateConfig(ServiceConfig):
     url: Optional[str] = None
     api_key: Optional[str] = None
     timeout: int = 30
-    additional_headers: Dict[str, str] = field(default_factory=dict)
+    additional_headers: Optional[Dict[str, str]] = None
 
 
 class WeaviateService(BaseService[WeaviateConfig]):
@@ -71,14 +71,14 @@ class WeaviateService(BaseService[WeaviateConfig]):
         
         if not self.config.url:
             raise ConfigurationError(
-                config_key="url",
-                message="Weaviate URL is required. Set WEAVIATE_URL environment variable."
+                "url",
+                "Weaviate URL is required. Set WEAVIATE_URL environment variable."
             )
         
         if not self.config.api_key:
             raise ConfigurationError(
-                config_key="api_key",
-                message="Weaviate API key is required. Set WEAVIATE_API_KEY environment variable."
+                "api_key",
+                "Weaviate API key is required. Set WEAVIATE_API_KEY environment variable."
             )
     
     async def _initialize_client(self) -> WeaviateClient:
@@ -86,28 +86,41 @@ class WeaviateService(BaseService[WeaviateConfig]):
         try:
             # Note: weaviate-client is not async, so we use sync client
             # but wrap our methods to be async for consistency
+            self.logger.debug("Starting Weaviate client initialization")
             client = weaviate.connect_to_weaviate_cloud(
                 cluster_url=self.config.url,
                 auth_credentials=Auth.api_key(self.config.api_key),
                 headers=self.config.additional_headers,
-                timeout_config=(self.config.timeout, self.config.timeout * 2)
+                additional_config=AdditionalConfig(
+                    timeout=Timeout(
+                        init=self.config.timeout,
+                        query=self.config.timeout,
+                        insert=self.config.timeout * 2
+                    )
+                )
             )
             
             # Verify connection
             if not client.is_ready():
-                raise WeaviateServiceError(
-                    message="Weaviate client is not ready after initialization"
+                raise V2ServiceError(
+                    "Weaviate",
+                    "Weaviate client is not ready after initialization",
+                    "initialize",
+                    {"url": self.config.url}
                 )
             
+            self.logger.info("Weaviate client initialized successfully")
             return client
             
         except Exception as e:
-            if isinstance(e, WeaviateServiceError):
-                raise
+            error_msg = f"Failed to initialize Weaviate client: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
             
-            raise WeaviateServiceError(
-                message=f"Failed to initialize Weaviate client: {str(e)}",
-                original_error=e
+            raise V2ServiceError(
+                "Weaviate",
+                error_msg,
+                "initialize",
+                {"url": self.config.url, "error": str(e)}
             )
     
     async def search(
@@ -142,20 +155,20 @@ class WeaviateService(BaseService[WeaviateConfig]):
         # Validate inputs
         if not collection:
             raise ValidationError(
-                field="collection",
-                message="Collection name is required"
+                "collection",
+                "Collection name is required"
             )
         
         if not query or not query.strip():
             raise ValidationError(
-                field="query",
-                message="Search query cannot be empty"
+                "query",
+                "Search query cannot be empty"
             )
         
         if limit < 1 or limit > 100:
             raise ValidationError(
-                field="limit",
-                message="Limit must be between 1 and 100"
+                "limit",
+                "Limit must be between 1 and 100"
             )
         
         try:
@@ -164,28 +177,28 @@ class WeaviateService(BaseService[WeaviateConfig]):
             # Get collection
             collection_obj = self.client.collections.get(collection)
             
-            # Build query
-            query_builder = collection_obj.query.near_text(
-                query=query,
-                limit=limit
-            )
-            
-            # Add property selection if specified
+            # Build query parameters
+            query_params = {
+                "query": query,
+                "limit": limit
+            }
+
+            # Add properties if specified
             if properties:
-                query_builder = query_builder.select(properties)
-            
-            # Add filters if provided
-            if where_filter:
-                query_builder = query_builder.where(where_filter)
-            
+                query_params["return_properties"] = properties
+
             # Add metadata if requested
             if return_metadata:
-                query_builder = query_builder.include_metadata(MetadataQuery.full())
-            
-            # Execute query
-            results = query_builder.do()
-            
-            # Convert to list of dicts
+                query_params["return_metadata"] = MetadataQuery(distance=True)
+
+            # Add where filter if provided
+            if where_filter:
+                query_params["where"] = where_filter
+
+            # Execute query - no chaining!
+            results = collection_obj.query.near_text(**query_params)
+
+            # Process results
             items = []
             for item in results.objects:
                 item_dict = {
@@ -195,8 +208,7 @@ class WeaviateService(BaseService[WeaviateConfig]):
                 
                 if return_metadata and hasattr(item, 'metadata'):
                     item_dict["metadata"] = {
-                        "distance": getattr(item.metadata, 'distance', None),
-                        "certainty": getattr(item.metadata, 'certainty', None)
+                        "distance": item.metadata.distance if hasattr(item.metadata, 'distance') else None
                     }
                 
                 items.append(item_dict)
@@ -208,10 +220,11 @@ class WeaviateService(BaseService[WeaviateConfig]):
             error_msg = f"Search failed in collection '{collection}': {str(e)}"
             self.logger.error(error_msg, exc_info=True)
             
-            raise WeaviateServiceError(
-                message=error_msg,
-                original_error=e,
-                details={"collection": collection, "query": query}
+            raise V2ServiceError(
+                "Weaviate",
+                error_msg,
+                "search",
+                {"collection": collection, "query": query}
             )
     
     async def vector_search(
@@ -239,14 +252,14 @@ class WeaviateService(BaseService[WeaviateConfig]):
         
         if not collection:
             raise ValidationError(
-                field="collection",
-                message="Collection name is required"
+                "collection",
+                "Collection name is required"
             )
         
         if not vector or not isinstance(vector, list):
             raise ValidationError(
-                field="vector",
-                message="Valid vector is required"
+                "vector",
+                "Valid vector is required"
             )
         
         try:
@@ -287,9 +300,11 @@ class WeaviateService(BaseService[WeaviateConfig]):
             
         except Exception as e:
             error_msg = f"Vector search failed in collection '{collection}': {str(e)}"
-            raise WeaviateServiceError(
-                message=error_msg,
-                original_error=e
+            raise V2ServiceError(
+                "Weaviate",
+                error_msg,
+                "vector_search",
+                {"collection": collection}
             )
     
     async def get_by_id(
@@ -357,9 +372,10 @@ class WeaviateService(BaseService[WeaviateConfig]):
             
         except Exception as e:
             error_msg = f"Failed to list collections: {str(e)}"
-            raise WeaviateServiceError(
-                message=error_msg,
-                original_error=e
+            raise V2ServiceError(
+                "Weaviate",
+                error_msg,
+                "get_collections"
             )
     
     async def collection_exists(self, collection: str) -> bool:

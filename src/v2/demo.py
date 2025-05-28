@@ -7,7 +7,7 @@ Run with: python -m src.v2.demo
 import asyncio
 from src.v2.core.flow_engine import FlowEngine, FlowContext, TransitionEvent, determine_event
 from src.v2.core.prompt_manager import get_prompt_manager
-from src.models.flow_models import FlowStep
+from src.v2.models.flow_models import FlowStep
 
 
 def print_separator():

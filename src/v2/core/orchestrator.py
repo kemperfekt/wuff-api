@@ -9,8 +9,8 @@ that coordinates the flow engine, services, and agents.
 from typing import List, Dict, Any, Optional
 import logging
 
-from src.models.flow_models import FlowStep
-from src.state.session_state import SessionState, SessionStore
+from src.v2.models.flow_models import FlowStep
+from src.v2.models.session_state import SessionState, SessionStore
 from src.v2.agents.base_agent import V2AgentMessage
 from src.v2.core.flow_engine import FlowEngine, FlowEvent, create_flow_engine
 from src.v2.core.flow_handlers import FlowHandlers

@@ -11,8 +11,8 @@ from enum import Enum
 from dataclasses import dataclass
 import logging
 
-from src.models.flow_models import FlowStep
-from src.state.session_state import SessionState
+from src.v2.models.flow_models import FlowStep
+from src.v2.models.session_state import SessionState
 from src.v2.agents.base_agent import V2AgentMessage
 from src.v2.core.exceptions import V2FlowError, V2ValidationError
 from src.v2.core.flow_handlers import FlowHandlers
@@ -279,12 +279,25 @@ class FlowEngine:
         """
         try:
             # Call the actual handler
-            next_event, messages = await self.handlers.handle_symptom_input(session, user_input, context)
+            result = await self.handlers.handle_symptom_input(session, user_input, context)
             
-            # Store the next event for post-processing
-            context['next_event'] = next_event
-            
-            return messages
+            # Handle the tuple return (FlowStep, messages)
+            if isinstance(result, tuple) and len(result) == 2:
+                next_state, messages = result
+                
+                # Determine event based on the returned state
+                if next_state == FlowStep.WAIT_FOR_CONFIRMATION:
+                    # Match was found, proceeding to confirmation
+                    context['next_event'] = 'symptom_found'
+                else:
+                    # No match found, staying in current state
+                    context['next_event'] = 'symptom_not_found'
+                
+                return messages
+            else:
+                # If handler returns just messages (shouldn't happen)
+                logger.warning("handle_symptom_input didn't return expected tuple format")
+                return result if isinstance(result, list) else []
             
         except Exception as e:
             logger.error(f"Error in symptom wrapper: {e}")
