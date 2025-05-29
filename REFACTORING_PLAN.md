@@ -146,8 +146,8 @@ src/
 
 ### Phase 7: Switch-over Execution
 - [x] Deploy V2 system
-- [x] Happy Path Bugs fixed in DEV
-- [ ] Bugs fixed and tests green in DEV
+- [x] Happy Path Bugs fixed
+- [x] All Bugs fixed & test suite green
 - [ ] Deployed to Scalingo
 - [ ] Switch DNS/routing to V2
 - [ ] Monitor for issues

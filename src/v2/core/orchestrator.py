@@ -148,6 +148,18 @@ class V2Orchestrator:
             
         except V2FlowError as e:
             logger.error(f"V2 Flow error: {e.message}")
+            # Check if the error contains messages from handlers
+            if hasattr(e, 'messages') and e.messages:
+                # Return the specific error messages from the handler
+                return [
+                    {
+                        "sender": msg.sender,
+                        "text": msg.text,
+                        "message_type": msg.message_type,
+                        "metadata": msg.metadata
+                    }
+                    for msg in e.messages
+                ]
             return self._create_error_response(
                 "Entschuldige, ich bin durcheinander gekommen. Lass uns nochmal von vorne anfangen.",
                 session_id

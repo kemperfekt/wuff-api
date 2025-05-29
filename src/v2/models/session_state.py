@@ -48,7 +48,12 @@ class SessionStore:
         return session
 
     def get_or_create(self, session_id: str) -> SessionState:
-        return self.sessions.get(session_id) or self.create_session()
+        if session_id not in self.sessions:
+            session = SessionState()
+            session.session_id = session_id  # Use the provided session_id
+            self.sessions[session_id] = session
+            return session
+        return self.sessions[session_id]
 
 
 # Globale Session-Verwaltung aktivieren (z. B. Zugriff über sessions["debug"])

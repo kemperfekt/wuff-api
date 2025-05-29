@@ -70,6 +70,11 @@ class PromptType(str, Enum):
     COMPANION_SAVE_ERROR = "companion.save.error"
     COMPANION_GENERAL_ERROR = "companion.general.error"
     
+    # Validation error prompts
+    INPUT_TOO_SHORT = "validation.input.too.short"
+    NO_BEHAVIOR_MATCH = "validation.no.behavior.match"
+    INVALID_YES_NO = "validation.invalid.yes.no"
+    
     # Other prompts
     VALIDATION = "validation.input"
     COMBINED_INSTINCT = "query.combined_instinct"

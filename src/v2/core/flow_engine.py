@@ -281,16 +281,20 @@ class FlowEngine:
             # Call the actual handler
             result = await self.handlers.handle_symptom_input(session, user_input, context)
             
-            # Handle the tuple return (FlowStep, messages)
+            # Handle the tuple return (next_event_string, messages)
             if isinstance(result, tuple) and len(result) == 2:
-                next_state, messages = result
+                next_event_string, messages = result
                 
-                # Determine event based on the returned state
-                if next_state == FlowStep.WAIT_FOR_CONFIRMATION:
+                # Set the next_event in context based on the string returned
+                if next_event_string == 'symptom_found':
                     # Match was found, proceeding to confirmation
                     context['next_event'] = 'symptom_found'
-                else:
+                elif next_event_string in ['symptom_not_found', 'stay_in_state']:
                     # No match found, staying in current state
+                    context['next_event'] = 'symptom_not_found'
+                else:
+                    # Unknown event, default to not found
+                    logger.warning(f"Unknown event string from symptom handler: {next_event_string}")
                     context['next_event'] = 'symptom_not_found'
                 
                 return messages

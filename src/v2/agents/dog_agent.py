@@ -217,6 +217,12 @@ class DogAgent(BaseAgent):
         
         if error_type == 'no_match':
             text = self.prompt_manager.get_prompt(PromptType.DOG_NO_MATCH_ERROR)
+        elif error_type == 'no_behavior_match':
+            text = self.prompt_manager.get_prompt(PromptType.NO_BEHAVIOR_MATCH)
+        elif error_type == 'input_too_short':
+            text = self.prompt_manager.get_prompt(PromptType.INPUT_TOO_SHORT)
+        elif error_type == 'invalid_yes_no':
+            text = self.prompt_manager.get_prompt(PromptType.INVALID_YES_NO)
         elif error_type == 'invalid_input':
             text = self.prompt_manager.get_prompt(PromptType.DOG_INVALID_INPUT_ERROR)
         elif error_type == 'technical':

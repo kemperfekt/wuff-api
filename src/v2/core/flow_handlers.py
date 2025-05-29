@@ -122,8 +122,8 @@ class FlowHandlers:
             messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input=user_input,
-                message_type=MessageType.INSTRUCTION,
-                metadata={"instruction_type": "describe_more"}
+                message_type=MessageType.ERROR,
+                metadata={"error_type": "input_too_short"}
             ))
             return ('stay_in_state', messages)
         
@@ -213,7 +213,7 @@ class FlowHandlers:
                 session_id=session.session_id,
                 user_input=user_input,
                 message_type=MessageType.ERROR,
-                metadata={"error_type": "no_match"}
+                metadata={"error_type": "no_behavior_match"}
             ))
             
             # Stay in current state
@@ -268,8 +268,8 @@ class FlowHandlers:
             messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input="",
-                message_type=MessageType.INSTRUCTION,
-                metadata={"instruction_type": "be_specific"}
+                message_type=MessageType.ERROR,
+                metadata={"error_type": "invalid_yes_no"}
             ))
             
             # Stay in current state

@@ -6,7 +6,7 @@ This module defines all custom exceptions used in the V2 system,
 providing consistent error handling and debugging information.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 class V2BaseException(Exception):
@@ -37,7 +37,8 @@ class V2FlowError(V2BaseException):
         self, 
         message: str, 
         current_state: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None
+        details: Optional[Dict[str, Any]] = None,
+        messages: Optional[List[Any]] = None
     ):
         """
         Initialize flow error.
@@ -46,9 +47,11 @@ class V2FlowError(V2BaseException):
             message: Error description  
             current_state: State where error occurred
             details: Additional error context
+            messages: Optional list of V2AgentMessage objects to return
         """
         super().__init__(message, details)
         self.current_state = current_state
+        self.messages = messages or []
         
         # Add current state to details
         if current_state:

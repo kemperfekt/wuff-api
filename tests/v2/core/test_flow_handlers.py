@@ -111,10 +111,10 @@ class TestSymptomInputHandler:
         assert next_event == "stay_in_state"
         assert len(messages) >= 1
         
-        # Check agent context for "describe_more" instruction
+        # Check agent context for "input_too_short" error
         call_args = mock_dog_agent.respond.call_args[0][0]
-        assert call_args.message_type == MessageType.INSTRUCTION
-        assert call_args.metadata['instruction_type'] == 'describe_more'
+        assert call_args.message_type == MessageType.ERROR
+        assert call_args.metadata['error_type'] == 'input_too_short'
     
     @pytest.mark.asyncio
     async def test_no_symptom_match_found(self, sample_session, mock_dog_agent, mock_services_bundle):
@@ -142,7 +142,7 @@ class TestSymptomInputHandler:
         # Check error type
         call_args = mock_dog_agent.respond.call_args[0][0]
         assert call_args.message_type == MessageType.ERROR
-        assert call_args.metadata['error_type'] == 'no_match'
+        assert call_args.metadata['error_type'] == 'no_behavior_match'
     
     @pytest.mark.asyncio
     async def test_symptom_handler_service_error(self, sample_session, mock_dog_agent, mock_services_bundle):
