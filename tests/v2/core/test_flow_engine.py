@@ -14,8 +14,8 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from typing import Dict, Any, List
 
-from src.models.flow_models import FlowStep
-from src.state.session_state import SessionState
+from src.v2.models.flow_models import FlowStep
+from src.v2.models.session_state import SessionState
 from src.v2.agents.base_agent import V2AgentMessage, MessageType
 from src.v2.core.flow_engine import FlowEngine, FlowEvent, Transition
 from src.v2.core.exceptions import V2FlowError, V2ValidationError

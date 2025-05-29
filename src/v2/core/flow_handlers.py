@@ -158,9 +158,10 @@ class FlowHandlers:
                 match_data = results[0]['properties'].get('schnelldiagnose', '')
                 
                 # Store match distance in the field
-                session.match_distance = results[0]['metadata'].get('distance')
+                # TODO: Add match_distance to SessionState if needed
+                # session.match_distance = results[0]['metadata'].get('distance')
                 
-                logger.info(f"Good match found with distance {session.match_distance}")
+                logger.info(f"Good match found with distance {results[0]['metadata'].get('distance')}")
             else:
                 match_found = False
                 match_data = None
@@ -168,9 +169,16 @@ class FlowHandlers:
                 
         except Exception as e:
             logger.error(f"Error in symptom search: {e}", exc_info=True)
-            match_found = False
-            match_data = None
-            print(f"DEBUG: Weaviate error caught, will show no-match message")
+            print(f"DEBUG: Weaviate error caught, will show technical error")
+            
+            # Return technical error
+            messages = await self.dog_agent.respond(AgentContext(
+                session_id=session.session_id,
+                user_input=user_input,
+                message_type=MessageType.ERROR,
+                metadata={"error_type": "technical"}
+            ))
+            return ('symptom_not_found', messages)
         
         # Store symptom in state
         session.active_symptom = user_input
@@ -195,8 +203,8 @@ class FlowHandlers:
                 metadata={"question_type": "ask_for_more"}
             )))
             
-            # Transition to wait for confirmation
-            return (FlowStep.WAIT_FOR_CONFIRMATION, messages)
+            # Return event and messages for flow engine to handle
+            return ('symptom_found', messages)
         else:
             # No match found - ask to try again
             logger.info("Symptom not found, staying in WAIT_FOR_SYMPTOM")

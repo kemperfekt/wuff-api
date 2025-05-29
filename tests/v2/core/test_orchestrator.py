@@ -8,8 +8,8 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock, create_autospec
 from typing import Dict, Any, List
 import asyncio
 
-from src.models.flow_models import FlowStep, AgentMessage
-from src.state.session_state import SessionState, SessionStore
+from src.v2.models.flow_models import FlowStep, AgentMessage
+from src.v2.models.session_state import SessionState, SessionStore
 from src.v2.agents.base_agent import V2AgentMessage, MessageType
 from src.v2.core.orchestrator import V2Orchestrator, get_orchestrator, handle_message, init_orchestrator
 from src.v2.core.flow_engine import FlowEngine, FlowEvent

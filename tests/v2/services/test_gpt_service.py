@@ -7,7 +7,8 @@ Uses mock-first approach to test without making real API calls.
 import os
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
-from openai.types.chat import ChatCompletion, ChatCompletionMessage, Choice
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
+from openai.types.chat.chat_completion import Choice
 from openai.types.chat.chat_completion import CompletionUsage
 
 from src.v2.services.gpt_service import GPTService, GPTConfig, create_gpt_service

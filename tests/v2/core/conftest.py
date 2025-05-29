@@ -10,8 +10,8 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from typing import Dict, Any, List
 
-from src.models.flow_models import FlowStep
-from src.state.session_state import SessionState, SessionStore
+from src.v2.models.flow_models import FlowStep
+from src.v2.models.session_state import SessionState, SessionStore
 from src.v2.agents.base_agent import AgentContext, MessageType, V2AgentMessage
 from src.v2.core.flow_engine import FlowEvent
 
@@ -46,27 +46,41 @@ def mock_weaviate_service():
     mock = AsyncMock()
     
     # Default search results
-    async def vector_search_side_effect(query, collection_name=None, limit=3):
+    async def search_side_effect(collection=None, query=None, limit=3, properties=None, return_metadata=True, **kwargs):
+        # Map collection to collection_name for compatibility
+        collection_name = collection
         if collection_name == "Symptome":
             if "bellt" in query.lower():
                 return [
                     {
-                        "text": "Hund bellt territorial zur Verteidigung",
-                        "score": 0.9,
-                        "metadata": {"instinct": "territorial"}
+                        "id": "uuid-1",
+                        "properties": {
+                            "text": "Hund bellt territorial zur Verteidigung",
+                            "schnelldiagnose": "Der Hund zeigt territoriales Verhalten zum Schutz seines Reviers",
+                            "instinct": "territorial"
+                        },
+                        "metadata": {"distance": 0.1, "certainty": 0.9}
                     },
                     {
-                        "text": "Bellverhalten bei Hunden",
-                        "score": 0.8,
-                        "metadata": {"behavior": "barking"}
+                        "id": "uuid-2",
+                        "properties": {
+                            "text": "Bellverhalten bei Hunden",
+                            "schnelldiagnose": "Bellen ist ein normales Kommunikationsmittel",
+                            "behavior": "barking"
+                        },
+                        "metadata": {"distance": 0.2, "certainty": 0.8}
                     }
                 ]
             elif "springt" in query.lower():
                 return [
                     {
-                        "text": "Hund springt aus Rudelinstinkt",
-                        "score": 0.85,
-                        "metadata": {"instinct": "rudel"}
+                        "id": "uuid-3",
+                        "properties": {
+                            "text": "Hund springt aus Rudelinstinkt",
+                            "schnelldiagnose": "Das Springen zeigt Aufregung und Begrüßungsverhalten im Rudel",
+                            "instinct": "rudel"
+                        },
+                        "metadata": {"distance": 0.15, "certainty": 0.85}
                     }
                 ]
             else:
@@ -75,34 +89,50 @@ def mock_weaviate_service():
         elif collection_name == "Instinkte":
             return [
                 {
-                    "text": "Territorial: Schutz des eigenen Gebiets",
-                    "score": 0.9,
-                    "metadata": {"type": "territorial"}
+                    "id": "inst-1",
+                    "properties": {
+                        "text": "Territorial: Schutz des eigenen Gebiets",
+                        "type": "territorial"
+                    },
+                    "metadata": {"distance": 0.1, "certainty": 0.9}
                 },
                 {
-                    "text": "Jagd: Verfolgung und Fangen von Beute",
-                    "score": 0.8,
-                    "metadata": {"type": "jagd"}
+                    "id": "inst-2",
+                    "properties": {
+                        "text": "Jagd: Verfolgung und Fangen von Beute",
+                        "type": "jagd"
+                    },
+                    "metadata": {"distance": 0.2, "certainty": 0.8}
                 },
                 {
-                    "text": "Rudel: Soziales Gruppenverhalten",
-                    "score": 0.7,
-                    "metadata": {"type": "rudel"}
+                    "id": "inst-3",
+                    "properties": {
+                        "text": "Rudel: Soziales Gruppenverhalten",
+                        "type": "rudel"
+                    },
+                    "metadata": {"distance": 0.3, "certainty": 0.7}
                 }
             ]
         
         elif collection_name == "Erziehung":
             return [
                 {
-                    "text": "Übe täglich 10 Minuten Impulskontrolle mit klaren Kommandos",
-                    "score": 0.9,
-                    "metadata": {"exercise_type": "impulse_control"}
+                    "id": "exercise-1",
+                    "properties": {
+                        "text": "Übe täglich 10 Minuten Impulskontrolle mit klaren Kommandos",
+                        "anleitung": "Übe täglich 10 Minuten Impulskontrolle mit klaren Kommandos",
+                        "exercise_type": "impulse_control"
+                    },
+                    "metadata": {"distance": 0.1, "certainty": 0.9}
                 }
             ]
         
         return []
     
-    mock.vector_search.side_effect = vector_search_side_effect
+    # The flow handlers use 'search' not 'vector_search'
+    mock.search.side_effect = search_side_effect
+    # Also keep vector_search for compatibility  
+    mock.vector_search.side_effect = search_side_effect
     mock.health_check.return_value = {"healthy": True}
     
     return mock

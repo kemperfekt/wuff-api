@@ -8,7 +8,7 @@ from unittest.mock import Mock, AsyncMock, patch
 from typing import Dict, Any, List
 from datetime import datetime, timezone
 
-from src.state.session_state import SessionState
+from src.v2.models.session_state import SessionState
 from src.v2.agents.base_agent import AgentContext, MessageType, V2AgentMessage
 from src.v2.core.flow_handlers import FlowHandlers
 from src.v2.core.exceptions import V2FlowError, V2ValidationError
@@ -84,10 +84,12 @@ class TestSymptomInputHandler:
         assert sample_session.active_symptom == "mein hund bellt ständig"
         
         # Verify Weaviate search was called
-        mock_services_bundle['weaviate_service'].vector_search.assert_called_once_with(
+        mock_services_bundle['weaviate_service'].search.assert_called_once_with(
+            collection="Symptome",
             query="mein hund bellt ständig",
-            collection_name="Symptome",
-            limit=3
+            limit=3,
+            properties=["symptom_name", "schnelldiagnose"],
+            return_metadata=True
         )
         
         # Verify dog agent was called twice (perspective + confirmation) 
@@ -106,7 +108,7 @@ class TestSymptomInputHandler:
         )
         
         # Verify
-        assert next_event == "symptom_not_found"
+        assert next_event == "stay_in_state"
         assert len(messages) >= 1
         
         # Check agent context for "describe_more" instruction
@@ -119,7 +121,7 @@ class TestSymptomInputHandler:
         """Test when no matching symptoms found in database"""
         # Setup Weaviate to return empty results
         mock_weaviate = mock_services_bundle['weaviate_service']
-        mock_weaviate.vector_search.return_value = []  # No matches
+        mock_weaviate.search.return_value = []  # No matches
         
         handlers = FlowHandlers(
             dog_agent=mock_dog_agent,
@@ -147,7 +149,7 @@ class TestSymptomInputHandler:
         """Test symptom handler when Weaviate service fails"""
         # Setup failing Weaviate service
         mock_weaviate = mock_services_bundle['weaviate_service']
-        mock_weaviate.vector_search.side_effect = Exception("Database error")
+        mock_weaviate.search.side_effect = Exception("Database error")
         
         handlers = FlowHandlers(
             dog_agent=mock_dog_agent,
@@ -199,7 +201,7 @@ class TestContextInputHandler:
         assert len(messages) >= 1  # Should have diagnosis + exercise question
         
         # Verify services were called
-        mock_services_bundle['weaviate_service'].vector_search.assert_called_once()
+        mock_services_bundle['weaviate_service'].search.assert_called_once()
         mock_services_bundle['gpt_service'].complete.assert_called_once()
         mock_services_bundle['prompt_manager'].get_prompt.assert_called_once()
         
@@ -229,7 +231,7 @@ class TestContextInputHandler:
         """Test context handler fallback on analysis error"""
         # Setup failing analysis
         mock_weaviate = mock_services_bundle['weaviate_service']
-        mock_weaviate.vector_search.side_effect = Exception("Analysis failed")
+        mock_weaviate.search.side_effect = Exception("Analysis failed")
         
         handlers = FlowHandlers(
             dog_agent=mock_dog_agent,
@@ -272,9 +274,9 @@ class TestExerciseRequestHandler:
         assert len(messages) >= 1  # Exercise + restart question
         
         # Verify exercise search was called
-        mock_services_bundle['weaviate_service'].vector_search.assert_called_once_with(
+        mock_services_bundle['weaviate_service'].search.assert_called_once_with(
+            collection="Erziehung",
             query="hund springt auf menschen",
-            collection_name="Erziehung",
             limit=3
         )
         
@@ -286,7 +288,7 @@ class TestExerciseRequestHandler:
         """Test exercise handler fallback when search fails"""
         # Setup failing Weaviate
         mock_weaviate = mock_services_bundle['weaviate_service']
-        mock_weaviate.vector_search.side_effect = Exception("Search failed")
+        mock_weaviate.search.side_effect = Exception("Search failed")
         
         handlers = FlowHandlers(
             dog_agent=mock_dog_agent,
@@ -443,7 +445,7 @@ class TestServiceIntegration:
         assert len(exercise_messages) >= 1
         
         # Verify all services were used
-        mock_services_bundle['weaviate_service'].vector_search.assert_called()
+        mock_services_bundle['weaviate_service'].search.assert_called()
         mock_services_bundle['gpt_service'].complete.assert_called()
         mock_services_bundle['prompt_manager'].get_prompt.assert_called()
     
@@ -511,7 +513,7 @@ class TestBusinessLogic:
         assert 'confidence' in result
         
         # Verify services called
-        mock_services_bundle['weaviate_service'].vector_search.assert_called_once()
+        mock_services_bundle['weaviate_service'].search.assert_called_once()
         mock_services_bundle['gpt_service'].complete.assert_called_once()
     
     @pytest.mark.asyncio
@@ -527,9 +529,9 @@ class TestBusinessLogic:
         assert len(exercise) > 10  # Should be meaningful content
         
         # Verify Weaviate search
-        mock_services_bundle['weaviate_service'].vector_search.assert_called_once_with(
+        mock_services_bundle['weaviate_service'].search.assert_called_once_with(
+            collection="Erziehung",
             query="hund springt auf menschen",
-            collection_name="Erziehung", 
             limit=3
         )
     
@@ -537,7 +539,7 @@ class TestBusinessLogic:
     async def test_exercise_finding_fallback(self, mock_services_bundle):
         """Test exercise finding fallback when no results"""
         # Setup empty search results
-        mock_services_bundle['weaviate_service'].vector_search.return_value = []
+        mock_services_bundle['weaviate_service'].search.return_value = []
         
         handlers = FlowHandlers(**mock_services_bundle)
         
@@ -622,7 +624,7 @@ class TestErrorHandling:
         failing_gpt.complete.side_effect = Exception("GPT failed")
         
         failing_weaviate = AsyncMock()
-        failing_weaviate.vector_search.side_effect = Exception("Weaviate failed")
+        failing_weaviate.search.side_effect = Exception("Weaviate failed")
         
         failing_redis = Mock()
         failing_redis.set.side_effect = Exception("Redis failed")
