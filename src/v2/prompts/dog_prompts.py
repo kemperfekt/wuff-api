@@ -23,13 +23,13 @@ NEED_MORE_DETAIL = """Kannst Du das Verhalten bitte etwas ausführlicher beschre
 ASK_FOR_MORE = """Magst Du mehr erfahren, warum ich mich so verhalte?"""
 
 # When user confirms they want more information
-ASK_FOR_CONTEXT = """Gut, dann brauche ich ein bisschen mehr Informationen. Bitte beschreibe, wie es zu der Situation kam, wer dabei war und was sonst noch wichtig sein könnte."""
+CONTEXT_QUESTION = """Gut, dann brauche ich ein bisschen mehr Informationen. Bitte beschreibe, wie es zu der Situation kam, wer dabei war und was sonst noch wichtig sein könnte."""
 
 # Not enough context provided
-NEED_MORE_CONTEXT = """Ich brauch noch ein bisschen mehr Info… Wo war das genau, was war los?"""
+NEED_MORE_CONTEXT = """Ich brauche noch ein bisschen mehr Info… Wo war das genau, was war los?"""
 
 # After diagnosis, offer exercise
-ASK_FOR_EXERCISE = """Möchtest du eine Lernaufgabe, die dir in dieser Situation helfen kann?"""
+EXERCISE_QUESTION = """Möchtest du eine Lernaufgabe, die dir in dieser Situation helfen kann?"""
 
 # After providing exercise, ask if user wants to analyze another behavior
 CONTINUE_OR_RESTART = """Möchtest du ein weiteres Hundeverhalten verstehen?"""
@@ -52,7 +52,7 @@ NO_MATCH_FOUND = """Hmm, zu diesem Verhalten habe ich leider noch keine Antwort.
 NOT_DOG_RELATED = """Hm, das klingt für mich nicht nach typischem Hundeverhalten. Magst du es nochmal anders beschreiben?"""
 
 # When ready to provide diagnosis
-DIAGNOSIS_INTRO = """Danke. Wenn ich das mit meinem Instinkt vergleiche, sieht es so aus:"""
+DIAGNOSIS_INTRO = """Danke. Aus der Hundeperspektive sieht es so aus:"""
 
 # Simple confirmation
 OKAY_UNDERSTOOD = """Okay, kein Problem. Wenn du es dir anders überlegst, sag einfach Bescheid."""

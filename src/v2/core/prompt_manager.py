@@ -38,12 +38,14 @@ class PromptType(str, Enum):
     DOG_GREETING = "dog.greeting"
     DOG_GREETING_FOLLOWUP = "dog.greeting.followup"
     DOG_PERSPECTIVE = "generation.dog_perspective"
-    DOG_INSTINCT_PERSPECTIVE = "dog.instinct.perspective"
+    DOG_ASK_FOR_MORE = "dog.ask.for.more"
+    DOG_DIAGNOSIS_INTRO = "dog.diagnosis.intro"
     DOG_DIAGNOSIS = "dog.diagnosis"
     DOG_CONFIRMATION_QUESTION = "dog.confirmation.question"
     DOG_CONTEXT_QUESTION = "dog.context.question"
     DOG_EXERCISE_QUESTION = "dog.exercise.question"
-    DOG_RESTART_QUESTION = "dog.restart.question"
+    #DOG_RESTART_QUESTION = "dog.restart.question"
+    DOG_CONTINUE_OR_RESTART = "dog.continue.or.restart"
     DOG_NO_MATCH_ERROR = "dog.no.match.error"
     DOG_INVALID_INPUT_ERROR = "dog.invalid.input.error"
     DOG_TECHNICAL_ERROR = "dog.technical.error"
@@ -71,6 +73,7 @@ class PromptType(str, Enum):
     # Other prompts
     VALIDATION = "validation.input"
     COMBINED_INSTINCT = "query.combined_instinct"
+    INSTINCT_ANALYSIS = "query.instinct_analysis"
 
 @dataclass
 class Prompt:
@@ -111,7 +114,7 @@ class Prompt:
         missing = set(self.variables) - set(kwargs.keys())
         if missing:
             raise PromptError(
-                prompt_key=self.key,
+                prompt_type=self.key,
                 message=f"Missing required variables: {missing}",
                 details={"missing_variables": list(missing)}
             )
@@ -120,7 +123,7 @@ class Prompt:
             return self.template.format(**kwargs)
         except KeyError as e:
             raise PromptError(
-                prompt_key=self.key,
+                prompt_type=self.key,
                 message=f"Error formatting prompt: {e}",
                 details={"error": str(e)}
             )
@@ -316,7 +319,7 @@ class PromptManager:
         
         if key not in self.prompts:
             raise PromptError(
-                prompt_key=key,
+                prompt_type=key,
                 message=f"Prompt not found: {key}",
                 details={"available_keys": list(self.prompts.keys())}
             )
@@ -381,7 +384,7 @@ class PromptManager:
         """
         if key not in self.prompts:
             raise PromptError(
-                prompt_key=key,
+                prompt_type=self.key,
                 message=f"Prompt not found: {key}"
             )
         

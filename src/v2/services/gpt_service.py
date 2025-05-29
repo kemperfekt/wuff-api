@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class GPTConfig(ServiceConfig):
     """Configuration for GPT Service"""
     api_key: Optional[str] = None
-    model: str = "gpt-4"
+    model: str = "gpt-3.5-turbo"
     max_tokens: Optional[int] = None
     temperature: float = 0.7
     timeout: int = 30
@@ -56,7 +56,7 @@ class GPTService(BaseService[GPTConfig]):
         if config is None:
             config = GPTConfig(
                 api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_APIKEY"),
-                model=os.getenv("GPT_MODEL", "gpt-4"),
+                model=os.getenv("GPT_MODEL", "gpt-3.5-turbo"),
                 temperature=float(os.getenv("GPT_TEMPERATURE", "0.7"))
             )
         
@@ -298,7 +298,7 @@ Hat die folgende Eingabe mit Hundeverhalten oder Hundetraining zu tun?
 # Convenience function for quick access
 async def create_gpt_service(
     api_key: Optional[str] = None,
-    model: str = "gpt-4",
+    model: str = "gpt-3.5-turbo",
     **kwargs
 ) -> GPTService:
     """

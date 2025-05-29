@@ -8,7 +8,6 @@ All business logic (RAG analysis, symptom checking, etc.) is handled by services
 
 from typing import List, Dict, Optional, Any
 from src.v2.agents.base_agent import BaseAgent, AgentContext, MessageType, V2AgentMessage
-from src.v2.core.prompt_manager import PromptType
 from src.v2.core.exceptions import V2AgentError, V2ValidationError
 from src.v2.core.prompt_manager import PromptType, PromptCategory
 
@@ -172,6 +171,7 @@ class DogAgent(BaseAgent):
             raise V2AgentError(f"Unknown response mode: {response_mode}")
     
     async def _handle_question(self, context: AgentContext) -> List[V2AgentMessage]:
+        print(f"DEBUG: Entering _handle_question")
         """
         Generate question messages from dog perspective.
         
@@ -183,14 +183,20 @@ class DogAgent(BaseAgent):
         """
         question_type = context.metadata.get('question_type', 'confirmation')
         
+        print(f"DEBUG _handle_question: question_type={question_type}")
+        
         if question_type == 'confirmation':
             text = self.prompt_manager.get_prompt(PromptType.DOG_CONFIRMATION_QUESTION)
         elif question_type == 'context':
             text = self.prompt_manager.get_prompt(PromptType.DOG_CONTEXT_QUESTION)
         elif question_type == 'exercise':
+            print(f"DEBUG: Getting exercise question")
             text = self.prompt_manager.get_prompt(PromptType.DOG_EXERCISE_QUESTION)
+            print(f"DEBUG: Exercise question text: {text}")
         elif question_type == 'restart':
-            text = self.prompt_manager.get_prompt(PromptType.DOG_RESTART_QUESTION)
+            text = self.prompt_manager.get_prompt(PromptType.DOG_CONTINUE_OR_RESTART)
+        elif question_type == 'ask_for_more':
+            text = self.prompt_manager.get_prompt(PromptType.DOG_ASK_FOR_MORE)
         else:
             # Fallback to generic question
             text = "Was möchtest du wissen?"
@@ -295,20 +301,36 @@ class DogAgent(BaseAgent):
         Returns:
             List with diagnosis message
         """
+       
+        print(f"DEBUG _generate_diagnosis: metadata={context.metadata}")
+       
         analysis_data = context.metadata.get('analysis_data', {})
         primary_instinct = analysis_data.get('primary_instinct', 'unbekannter Instinkt')
         primary_description = analysis_data.get('primary_description', 'Keine Beschreibung verfügbar')
         
-        # Format diagnosis from dog perspective
-        diagnosis_text = await self.generate_text_with_prompt(
-            PromptType.DOG_DIAGNOSIS,
-            primary_instinct=primary_instinct,
-            primary_description=primary_description,
-            temperature=self._default_temperature
-        )
+        print(f"DEBUG: primary_instinct={primary_instinct}, primary_description={primary_description}")
+
+        try:
+            # Format diagnosis from dog perspective
+            diagnosis_text = await self.generate_text_with_prompt(
+                PromptType.DOG_DIAGNOSIS_INTRO,
+                primary_instinct=primary_instinct,
+                primary_description=primary_description,
+                temperature=self._default_temperature
+            )
+
+            print(f"DEBUG: Generated diagnosis text: {diagnosis_text[:50]}...")
+            
+            return [self.create_message(diagnosis_text, MessageType.RESPONSE)]
         
-        return [self.create_message(diagnosis_text, MessageType.RESPONSE)]
-    
+        except Exception as e:
+            print(f"DEBUG: Error generating diagnosis: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return error message
+            return [self.create_message(self.prompt_manager.get_prompt(PromptType.DOG_TECHNICAL_ERROR), MessageType.ERROR)]
+
+
     async def _generate_exercise_response(self, context: AgentContext) -> List[V2AgentMessage]:
         """
         Generate exercise recommendation response.

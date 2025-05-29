@@ -30,7 +30,7 @@ class SessionState(BaseModel):
     awaiting_diagnosis_confirmation: bool = False
     diagnosis_confirmed: bool = False
     current_step: FlowStep = FlowStep.GREETING
-    feedback: Optional[str] = None
+    feedback: List[str] = Field(default_factory=list)
     messages: List[AgentMessage] = Field(default_factory=list)
     match_distance: Optional[float] = None
 

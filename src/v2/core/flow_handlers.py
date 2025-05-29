@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timezone
 
 from src.v2.models.session_state import SessionState
+from src.v2.models.flow_models import FlowStep
 from src.v2.agents.dog_agent import DogAgent
 from src.v2.agents.companion_agent import CompanionAgent
 from src.v2.agents.base_agent import AgentContext, MessageType, V2AgentMessage
@@ -111,19 +112,20 @@ class FlowHandlers:
                 message=f"Failed to generate greeting: {str(e)}"
             ) from e
     
-    async def handle_symptom_input(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+    async def handle_symptom_input(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> Tuple[Any, List[V2AgentMessage]]:
         """Handle user's symptom description with semantic search"""
         logger.info(f"Handling symptom input: '{user_input[:50]}...'")
         
         # Validate input length
         if len(user_input) < 10:
             logger.info(f"Input too short ({len(user_input)} chars): '{user_input}'")
-            return await self.dog_agent.respond(AgentContext(
+            messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input=user_input,
                 message_type=MessageType.INSTRUCTION,
                 metadata={"instruction_type": "describe_more"}
             ))
+            return ('stay_in_state', messages)
         
         try:
             # Use semantic search to find matching symptoms
@@ -150,15 +152,15 @@ class FlowHandlers:
             
             # Check if we have a good match
             # Note: Lower distance = better match in Weaviate
-            if results and results[0]['metadata'].get('distance', 1.0) < 0.4:  # Threshold can be tuned
+            if results and results[0]['metadata'].get('distance', 1.0) < 0.6:  # Threshold can be tuned
                 match_found = True
                 # Use schnelldiagnose (quick diagnosis) from the matched symptom
                 match_data = results[0]['properties'].get('schnelldiagnose', '')
                 
-                # Store match distance in session
+                # Store match distance in the field
                 session.match_distance = results[0]['metadata'].get('distance')
                 
-                logger.info(f"Good match found with distance {session.metadata['match_distance']}")
+                logger.info(f"Good match found with distance {session.match_distance}")
             else:
                 match_found = False
                 match_data = None
@@ -168,6 +170,7 @@ class FlowHandlers:
             logger.error(f"Error in symptom search: {e}", exc_info=True)
             match_found = False
             match_data = None
+            print(f"DEBUG: Weaviate error caught, will show no-match message")
         
         # Store symptom in state
         session.active_symptom = user_input
@@ -184,12 +187,12 @@ class FlowHandlers:
                 }
             ))
             
-            # Add confirmation question
+            # Ask if user wants to know more
             messages.extend(await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input="",
                 message_type=MessageType.QUESTION,
-                metadata={"question_type": "confirmation"}
+                metadata={"question_type": "ask_for_more"}
             )))
             
             # Transition to wait for confirmation
@@ -197,6 +200,7 @@ class FlowHandlers:
         else:
             # No match found - ask to try again
             logger.info("Symptom not found, staying in WAIT_FOR_SYMPTOM")
+            print(f"DEBUG: Showing no-match error message")
             messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input=user_input,
@@ -208,21 +212,22 @@ class FlowHandlers:
             return ('symptom_not_found', messages)
         
 
-    async def handle_confirmation(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> List[V2AgentMessage]:
+    async def handle_confirmation(self, session: SessionState, user_input: str, context: Dict[str, Any]) -> Tuple[Any, List[V2AgentMessage]]:
         """Handle user's confirmation response with match tracking"""
         logger.info(f"Handling confirmation response: '{user_input}'")
         
         # Normalize input for checking
         normalized_input = user_input.lower().strip()
         
+        # Get match distance from V2 SessionState field
+        match_distance = session.match_distance if session.match_distance is not None else 'unknown'
+        
         # Log the confirmation result for match quality analysis
         if "ja" in normalized_input or "yes" in normalized_input:
             confirmed = True
-            match_distance = session.match_distance if session.match_distance is not None else 'unknown'
             logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: yes, Distance: {match_distance}")
             
             # Transition to context gathering
-            session.current_step = FlowStep.WAIT_FOR_CONTEXT
             messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input="",
@@ -234,11 +239,9 @@ class FlowHandlers:
             
         elif "nein" in normalized_input or "no" in normalized_input:
             confirmed = False
-            match_distance = session.match_distance if session.match_distance is not None else 'unknown'
             logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: no, Distance: {match_distance}")
             
             # Transition to end or restart
-            session.current_step = FlowStep.END_OR_RESTART
             messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input="",
@@ -260,9 +263,9 @@ class FlowHandlers:
                 message_type=MessageType.INSTRUCTION,
                 metadata={"instruction_type": "be_specific"}
             ))
-        
-        # Stay in current state
-        return (session.current_step, messages)
+            
+            # Stay in current state
+            return ('stay_in_state', messages)
         
     
     async def handle_context_input(
@@ -305,6 +308,8 @@ class FlowHandlers:
             
             # Perform instinct analysis
             analysis_data = await self._analyze_instincts(symptom, user_input)
+            print(f"DEBUG: Analysis data: {analysis_data}")
+
             
             # Generate diagnosis from dog perspective
             agent_context = AgentContext(
@@ -318,6 +323,10 @@ class FlowHandlers:
             )
             
             messages = await self.dog_agent.respond(agent_context)
+            print(f"DEBUG: Diagnosis messages: {len(messages)}")
+            for i, msg in enumerate(messages):
+                print(f"DEBUG: Message {i}: type={msg.message_type}, text={msg.text[:50]}...")
+
             
             # Add exercise offer question
             exercise_context = AgentContext(
@@ -327,12 +336,16 @@ class FlowHandlers:
             )
             
             exercise_messages = await self.dog_agent.respond(exercise_context)
+            print(f"DEBUG: Exercise messages: {len(exercise_messages)}")
+            for i, msg in enumerate(exercise_messages):
+                print(f"DEBUG: Exercise msg {i}: type={msg.message_type}, text={msg.text[:50]}...")
             messages.extend(exercise_messages)
             
             return messages
             
         except Exception as e:
             logger.error(f"Error in context input handler: {e}")
+            print(f"DEBUG: Full error in context handler: {e}")
             
             # Fallback to basic response
             agent_context = AgentContext(
@@ -366,6 +379,7 @@ class FlowHandlers:
         try:
             # Search for relevant exercise
             exercise_data = await self._find_exercise(session.active_symptom)
+            print(f"DEBUG: Found exercise data: {exercise_data[:100]}...")
             
             # Generate exercise response
             agent_context = AgentContext(
@@ -379,6 +393,7 @@ class FlowHandlers:
             )
             
             messages = await self.dog_agent.respond(agent_context)
+            print(f"DEBUG: Exercise response messages: {len(messages)}")
             
             # Add restart question
             restart_context = AgentContext(
@@ -473,10 +488,7 @@ class FlowHandlers:
         logger.info(f"Handling feedback answer: '{user_input[:30]}...'")
         
         try:
-            # Store feedback answer in session
-            if not hasattr(session, 'feedback'):
-                session.feedback = []
-            
+            # Store feedback in the feedback list
             session.feedback.append(user_input.strip())
             
             # Generate acknowledgment
@@ -486,12 +498,12 @@ class FlowHandlers:
                 message_type=MessageType.RESPONSE,
                 metadata={'response_mode': 'acknowledgment'}
             )
-            
+        
             messages = await self.companion_agent.respond(agent_context)
             return messages
-            
+        
         except Exception as e:
-            logger.error(f"Error in feedback answer handler: {e}")
+            logger.error(f"Error in feedback answer handler: {e}")            
             
             # Still acknowledge, but log error
             agent_context = AgentContext(
@@ -523,10 +535,7 @@ class FlowHandlers:
         logger.info(f"Handling feedback completion for session {session.session_id}")
         
         try:
-            # Store final answer
-            if not hasattr(session, 'feedback'):
-                session.feedback = []
-            
+            # Store final answer in feedback list
             session.feedback.append(user_input.strip())
             
             # Save feedback to storage
@@ -578,9 +587,9 @@ class FlowHandlers:
         try:
             # Search instinct database
             combined_query = f"{symptom} {context}"
-            instinct_results = await self.weaviate_service.vector_search(
+            instinct_results = await self.weaviate_service.search(
+                collection="Instinkte",
                 query=combined_query,
-                collection_name="Instinkte",
                 limit=5
             )
             
@@ -589,7 +598,7 @@ class FlowHandlers:
                 # Format instinct data for analysis
                 instinct_descriptions = {}
                 for result in instinct_results:
-                    text = result.get('text', '')
+                    text = result.get('properties', {}).get('text', '')
                     if 'jagd' in text.lower():
                         instinct_descriptions['jagd'] = text
                     elif 'rudel' in text.lower():
@@ -601,7 +610,7 @@ class FlowHandlers:
                 
                 # GPT analysis
                 analysis_prompt = self.prompt_manager.get_prompt(
-                    PromptType.COMBINED_INSTINCT,
+                    PromptType.INSTINCT_ANALYSIS,  
                     symptom=symptom,
                     context=context
                 )
@@ -644,17 +653,25 @@ class FlowHandlers:
             Exercise description string
         """
         try:
+            print(f"DEBUG _find_exercise: Searching for symptom: {symptom}")
             # Search exercise database
-            exercise_results = await self.weaviate_service.vector_search(
+            exercise_results = await self.weaviate_service.search(
+                collection="Erziehung",
                 query=symptom,
-                collection_name="Erziehung",
                 limit=3
             )
+            
+            print(f"DEBUG: Found {len(exercise_results) if exercise_results else 0} exercise results")
             
             if exercise_results and len(exercise_results) > 0:
                 # Return best matching exercise
                 best_exercise = exercise_results[0]
-                return best_exercise.get('text', 'Keine spezifische Übung gefunden.')
+                print(f"DEBUG: Best exercise result: {best_exercise}")
+
+                text = best_exercise.get('properties', {}).get('anleitung', 'Keine spezifische Übung gefunden.')
+
+                print(f"DEBUG: Exercise text: {text[:100]}...")
+                return text
             
             # Fallback exercise
             return "Übe täglich 10 Minuten Impulskontrolle mit deinem Hund durch klare Kommandos und Belohnungen."
@@ -674,20 +691,23 @@ class FlowHandlers:
             True if saved successfully, False otherwise
         """
         try:
-            if not hasattr(session, 'feedback') or not session.feedback:
+            # Get feedback from the session's feedback list
+            feedback_list = session.feedback
+            
+            if not feedback_list:
                 return False
             
             # Prepare feedback data
             feedback_data = {
                 'session_id': session.session_id,
                 'symptom': getattr(session, 'active_symptom', ''),
-                'responses': session.feedback,
+                'responses': feedback_list,
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             # Save to Redis
             if self.redis_service:
-                success = self.redis_service.set(
+                self.redis_service.set(
                     f"feedback:{session.session_id}",
                     feedback_data,
                     expire=7776000  # 90 days

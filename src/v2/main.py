@@ -13,8 +13,8 @@ from typing import List, Dict, Any
 import logging
 
 # V2 imports - the key difference from V1
-from src.state.session_state import SessionStore
 from src.v2.core.orchestrator import V2Orchestrator, init_orchestrator
+from src.v2.models.session_state import SessionStore
 from src.v2.models.flow_models import FlowStep
 from src.core.config import setup_logging
 
@@ -249,16 +249,16 @@ async def get_prompt_debug_info():
         )
 
 
-@app.get("/v2/debug/schema/{collection}")
-async def get_collection_schema(collection: str):
-    """Get schema for a specific collection"""
-    client = weaviate_service._client
-    schema = client.collections.get(collection).config.get()
-    properties = [prop.name for prop in schema.properties]
-    return {
-        "collection": collection,
-        "properties": properties
-    }
+#@app.get("/v2/debug/schema/{collection}")
+#async def get_collection_schema(collection: str):
+#    """Get schema for a specific collection"""
+#    client = weaviate_service._client
+#    schema = client.collections.get(collection).config.get()
+#    properties = [prop.name for prop in schema.properties]
+#    return {
+#        "collection": collection,
+#        "properties": properties
+#    }
 
 
 # Startup event for initialization

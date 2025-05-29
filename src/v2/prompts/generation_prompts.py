@@ -20,6 +20,7 @@ Hier ist eine Beschreibung aus ähnlichen Situationen:
 
 Du bist ein Hund. Beschreibe ruhig und klar, wie du dieses Verhalten aus deiner Sicht erlebt hast. 
 Sprich nicht über Menschen oder Trainingsmethoden. Nenne keine Instinkte beim Namen. Keine Fantasie. Keine Fachbegriffe.
+WICHTIG: Beschränke deine Antwort auf maximal 5 Sätze.
 """
 
 # ============================================================================
@@ -40,6 +41,7 @@ Sexual: {sexual}
 
 Du bist ich – ein Hund. Erkläre dem Menschen, welcher dieser Impulse dich am besten beschreibt und warum. 
 Vermeide Fachbegriffe, bleib bei deinem Gefühl. Keine Instinktnamen nennen. Sprich nicht über Menschen oder Training.
+WICHTIG: Beschränke deine Antwort auf maximal 5 Sätze.
 """
 
 # ============================================================================
