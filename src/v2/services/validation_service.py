@@ -147,7 +147,19 @@ class ValidationService:
         
         # Special validation for email (question 5)
         if question_number == 5:
-            if "@" not in user_input or "." not in user_input:
+            # Basic email validation: check for @ and . in proper positions
+            at_index = user_input.find("@")
+            if at_index == -1 or at_index == 0:
+                return ValidationResult(
+                    valid=False,
+                    error_type="invalid_email",
+                    message="Please provide a valid email address",
+                    details={"question_number": question_number}
+                )
+            
+            # Check for dot after @ symbol
+            domain_part = user_input[at_index + 1:]
+            if "." not in domain_part or domain_part.startswith(".") or domain_part.endswith("."):
                 return ValidationResult(
                     valid=False,
                     error_type="invalid_email",
