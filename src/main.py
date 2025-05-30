@@ -19,6 +19,36 @@ from src.models.session_state import SessionStore
 from src.models.flow_models import FlowStep
 from src.core.logging_config import setup_logging
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan event handler for startup/shutdown"""
+    global orchestrator
+    
+    # Startup
+    logger.info("=" * 60)
+    logger.info("🚀 WuffChat V2 API Starting...")
+    logger.info("=" * 60)
+    
+    # Initialize orchestrator with lazy loading to avoid blocking health checks
+    orchestrator = init_orchestrator(session_store)
+    
+    # Log configuration
+    logger.info("📋 Configuration:")
+    logger.info(f"  - Session Store: {len(session_store.sessions)} active sessions")
+    logger.info(f"  - V2 Orchestrator: Initialized (services lazy-loaded)")
+    logger.info("  - Services: Will initialize on first use")
+    
+    logger.info("=" * 60)
+    logger.info("✅ V2 API Ready!")
+    logger.info("=" * 60)
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 WuffChat V2 API Shutting down...")
+    # Add any cleanup code here if needed
+    logger.info("👋 Goodbye!")
+
 # Initialize FastAPI app with lifespan
 app = FastAPI(
     title="WuffChat V2 API",
@@ -261,38 +291,6 @@ async def get_prompt_debug_info():
 #        "collection": collection,
 #        "properties": properties
 #    }
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """FastAPI lifespan event handler for startup/shutdown"""
-    global orchestrator
-    
-    # Startup
-    logger.info("=" * 60)
-    logger.info("🚀 WuffChat V2 API Starting...")
-    logger.info("=" * 60)
-    
-    # Initialize orchestrator with lazy loading to avoid blocking health checks
-    orchestrator = init_orchestrator(session_store)
-    
-    # Log configuration
-    logger.info("📋 Configuration:")
-    logger.info(f"  - Session Store: {len(session_store.sessions)} active sessions")
-    logger.info(f"  - V2 Orchestrator: Initialized (services lazy-loaded)")
-    logger.info("  - Services: Will initialize on first use")
-    
-    logger.info("=" * 60)
-    logger.info("✅ V2 API Ready!")
-    logger.info("=" * 60)
-    
-    yield
-    
-    # Shutdown
-    logger.info("🛑 WuffChat V2 API Shutting down...")
-    # Add any cleanup code here if needed
-    logger.info("👋 Goodbye!")
-
 
 # Main entry point
 if __name__ == "__main__":
