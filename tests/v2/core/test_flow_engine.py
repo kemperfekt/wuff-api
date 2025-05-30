@@ -780,6 +780,59 @@ class TestFlowEngineDemo:
             print("\n✅ FSM Demo abgeschlossen!")
 
 
+# ===========================================
+# REGRESSION TESTS - SPECIFIC BUG FIXES
+# ===========================================
+
+@pytest.mark.integration  
+class TestRegressionFixes:
+    """Tests for specific bugs that were fixed"""
+    
+    @pytest.mark.asyncio
+    async def test_nein_after_dog_perspective_restarts_immediately(self, mock_services_bundle):
+        """
+        Regression test: When user says 'nein' after dog perspective,
+        should restart immediately to WAIT_FOR_SYMPTOM, not go to END_OR_RESTART
+        
+        Bug: User had to say 'nein' twice - once after perspective, then again
+        after "Möchtest du ein anderes Verhalten verstehen?"
+        
+        Fix: 'nein' after perspective should directly restart conversation
+        """
+        # Setup
+        mock_gpt = mock_services_bundle['gpt_service']
+        mock_weaviate = mock_services_bundle['weaviate_service'] 
+        mock_redis = mock_services_bundle['redis_service']
+        mock_weaviate.semantic_search_symptoms.return_value = [{
+            'content': 'Bellen an der Haustür',
+            'distance': 0.15,
+            'properties': {'symptom': 'Bellen', 'instinct': 'Territorial'}
+        }]
+        
+        # Create engine and session - using REAL handlers to test actual fix
+        engine = FlowEngine()
+        session = SessionState(session_id="test_nein_restart")
+        session.current_step = FlowStep.WAIT_FOR_CONFIRMATION
+        session.active_symptom = "Bellen an der Haustür"
+        
+        # User says "nein" after dog perspective was shown
+        # Note: WAIT_FOR_CONFIRMATION uses USER_INPUT event, handler determines yes/no
+        state, messages = await engine.process_event(
+            session, FlowEvent.USER_INPUT, "nein"
+        )
+        
+        # CRITICAL: Should transition directly to WAIT_FOR_SYMPTOM (restart)
+        # NOT to END_OR_RESTART which would require another "nein"
+        assert state == FlowStep.WAIT_FOR_SYMPTOM, f"Expected WAIT_FOR_SYMPTOM, got {state.value}"
+        
+        # Should provide a message
+        assert len(messages) >= 1
+        
+        print("✅ Bug fix verified: 'nein' after dog perspective restarts immediately")
+        print(f"   Final state: {state.value}")
+        print(f"   Number of messages: {len(messages)}")
+
+
 if __name__ == "__main__":
     # Run a quick validation when script is executed directly
     print("🧪 V2 FlowEngine Test Suite")
