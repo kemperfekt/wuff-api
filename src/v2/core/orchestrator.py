@@ -160,8 +160,9 @@ class V2Orchestrator:
                     }
                     for msg in e.messages
                 ]
+            # For flow errors without messages, return a more specific error
             return self._create_error_response(
-                "Entschuldige, ich bin durcheinander gekommen. Lass uns nochmal von vorne anfangen.",
+                "Ich habe deine Eingabe nicht verstanden. Kannst du es anders formulieren?",
                 session_id
             )
             

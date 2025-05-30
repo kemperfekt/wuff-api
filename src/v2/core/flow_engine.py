@@ -132,18 +132,10 @@ class FlowEngine:
         
         self.add_transition(
             from_state=FlowStep.WAIT_FOR_CONFIRMATION,
-            event=FlowEvent.YES_RESPONSE,
+            event=FlowEvent.USER_INPUT,
             to_state=FlowStep.WAIT_FOR_CONTEXT,
-            handler=self._handle_confirmation_yes,
-            description="User wants to learn more -> ask for context"
-        )
-        
-        self.add_transition(
-            from_state=FlowStep.WAIT_FOR_CONFIRMATION,
-            event=FlowEvent.NO_RESPONSE,
-            to_state=FlowStep.END_OR_RESTART,
-            handler=self._handle_confirmation_no,
-            description="User doesn't want more info -> offer restart"
+            handler=self._handle_confirmation_wrapper,
+            description="Process confirmation response"
         )
         
         # ===========================================
@@ -154,7 +146,7 @@ class FlowEngine:
             from_state=FlowStep.WAIT_FOR_CONTEXT,
             event=FlowEvent.USER_INPUT,
             to_state=FlowStep.ASK_FOR_EXERCISE,
-            handler=self.handlers.handle_context_input,
+            handler=self._handle_context_wrapper,
             description="Process context and provide instinct analysis"
         )
         
@@ -303,8 +295,55 @@ class FlowEngine:
                 logger.warning("handle_symptom_input didn't return expected tuple format")
                 return result if isinstance(result, list) else []
             
+        except V2FlowError:
+            # Re-raise V2FlowError as is to preserve messages
+            raise
         except Exception as e:
             logger.error(f"Error in symptom wrapper: {e}")
+            raise
+    
+    async def _handle_confirmation_wrapper(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Wrapper for confirmation input that handles different responses.
+        """
+        try:
+            # Call the actual handler
+            result = await self.handlers.handle_confirmation(session, user_input, context)
+            
+            # Handle the tuple return (next_state, messages)
+            if isinstance(result, tuple) and len(result) == 2:
+                next_state, messages = result
+                
+                # Handle different outcomes
+                if next_state == FlowStep.WAIT_FOR_CONTEXT:
+                    # User said yes, proceed normally
+                    return messages
+                elif next_state == FlowStep.END_OR_RESTART:
+                    # User said no, need to update state
+                    session.current_step = FlowStep.END_OR_RESTART
+                    return messages
+                elif next_state == 'stay_in_state':
+                    # Invalid input, stay in current state
+                    context['next_event'] = 'stay_in_state'
+                    return messages
+                else:
+                    logger.warning(f"Unknown state from confirmation handler: {next_state}")
+                    return messages
+            else:
+                # If handler returns just messages
+                logger.warning("handle_confirmation didn't return expected tuple format")
+                return result if isinstance(result, list) else []
+                
+        except V2FlowError:
+            # Re-raise V2FlowError as is to preserve messages
+            raise
+        except Exception as e:
+            logger.error(f"Error in confirmation wrapper: {e}")
             raise
     
     async def _handle_confirmation_yes(
@@ -340,6 +379,42 @@ class FlowEngine:
         )
         
         return await self.handlers.dog_agent.respond(agent_context)
+    
+    async def _handle_context_wrapper(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Wrapper for context input that validates length.
+        """
+        try:
+            # Check if input is too short
+            if len(user_input.strip()) < 5:
+                from src.v2.agents.base_agent import AgentContext, MessageType
+                
+                agent_context = AgentContext(
+                    session_id=session.session_id,
+                    user_input=user_input,
+                    message_type=MessageType.INSTRUCTION,
+                    metadata={'instruction_type': 'be_specific'}
+                )
+                
+                messages = await self.handlers.dog_agent.respond(agent_context)
+                # Stay in current state
+                context['next_event'] = 'stay_in_state'
+                return messages
+            
+            # Call the actual handler for valid input
+            return await self.handlers.handle_context_input(session, user_input, context)
+                
+        except V2FlowError:
+            # Re-raise V2FlowError as is to preserve messages
+            raise
+        except Exception as e:
+            logger.error(f"Error in context wrapper: {e}")
+            raise
     
     async def _handle_exercise_declined(
         self, 
@@ -537,13 +612,12 @@ class FlowEngine:
             if transition.handler:
                 messages = await transition.handler(session, user_input, context)
             
-            # Handle special case for symptom input that needs conditional transitions
-            if event == FlowEvent.USER_INPUT and current_state == FlowStep.WAIT_FOR_SYMPTOM:
-                next_event = context.get('next_event')
-                if next_event == 'symptom_not_found':
-                    # Stay in same state, don't transition
-                    self.logger.info("Symptom not found, staying in WAIT_FOR_SYMPTOM")
-                    return current_state, messages
+            # Handle special cases that need conditional transitions
+            next_event = context.get('next_event')
+            if next_event in ['symptom_not_found', 'stay_in_state']:
+                # Stay in same state, don't transition
+                self.logger.info(f"Staying in current state: {current_state.value}")
+                return current_state, messages
             
             # Update session state
             old_state = session.current_step
@@ -585,7 +659,12 @@ class FlowEngine:
         if current_state == FlowStep.WAIT_FOR_SYMPTOM:
             return FlowEvent.USER_INPUT
         
-        elif current_state in [FlowStep.WAIT_FOR_CONFIRMATION, FlowStep.ASK_FOR_EXERCISE, FlowStep.END_OR_RESTART]:
+        elif current_state == FlowStep.WAIT_FOR_CONFIRMATION:
+            # Always use USER_INPUT for confirmation state
+            # The handler will determine if it's yes/no/invalid
+            return FlowEvent.USER_INPUT
+            
+        elif current_state in [FlowStep.ASK_FOR_EXERCISE, FlowStep.END_OR_RESTART]:
             # Yes/No responses
             if "ja" in user_input:
                 return FlowEvent.YES_RESPONSE

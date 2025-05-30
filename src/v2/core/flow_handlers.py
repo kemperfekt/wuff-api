@@ -298,18 +298,6 @@ class FlowHandlers:
         logger.info(f"Handling context input: '{user_input[:50]}...'")
         
         try:
-            # Validate input length
-            if len(user_input.strip()) < 5:
-                agent_context = AgentContext(
-                    session_id=session.session_id,
-                    user_input=user_input,
-                    message_type=MessageType.INSTRUCTION,
-                    metadata={'instruction_type': 'be_specific'}
-                )
-                
-                messages = await self.dog_agent.respond(agent_context)
-                return messages
-            
             # Combine symptom and context for analysis
             symptom = session.active_symptom
             combined_input = f"Verhalten: {symptom}\nKontext: {user_input}"
