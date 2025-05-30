@@ -52,7 +52,7 @@ class ValidationService:
                 valid=False,
                 error_type="input_too_short",
                 message=f"Symptom description too short: {len(user_input)} characters (minimum: 10)",
-                details={"min_length": 10, "actual_length": len(user_input)}
+                details={"min_length": 10, "actual_length": len(user_input), "error_type": "input_too_short"}
             )
         
         # Check if input seems to be dog-related (basic check)
@@ -61,7 +61,7 @@ class ValidationService:
                 valid=False,
                 error_type="input_too_short", 
                 message="Symptom description should contain more detail",
-                details={"word_count": len(user_input.split())}
+                details={"word_count": len(user_input.split()), "error_type": "input_too_short"}
             )
         
         return ValidationResult(valid=True)
@@ -84,7 +84,7 @@ class ValidationService:
                 valid=False,
                 error_type="context_too_short",
                 message=f"Context description too short: {len(user_input)} characters (minimum: 5)",
-                details={"min_length": 5, "actual_length": len(user_input)}
+                details={"min_length": 5, "actual_length": len(user_input), "error_type": "context_too_short"}
             )
         
         return ValidationResult(valid=True)
@@ -120,7 +120,7 @@ class ValidationService:
             valid=False,
             error_type="invalid_yes_no",
             message=f"Invalid yes/no response: '{user_input}'",
-            details={"expected": ["ja", "nein"], "received": user_input}
+            details={"expected": ["ja", "nein"], "received": user_input, "error_type": "invalid_yes_no"}
         )
     
     async def validate_feedback_response(self, user_input: str, question_number: int) -> ValidationResult:

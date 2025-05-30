@@ -292,12 +292,18 @@ class V2Orchestrator:
         # Get error type from validation details - map validation to agent error types
         error_details = error.details or {}
         
-        # Use the error details from the ValidationService directly
-        if "input_too_short" in str(error.message).lower():
+        # Use the error type from validation details
+        validation_error_type = error_details.get("error_type", "")
+        
+        if validation_error_type == "input_too_short":
             agent_error_type = "input_too_short"
-        elif "context_too_short" in str(error.message).lower():
+        elif validation_error_type == "context_too_short":
             agent_error_type = "input_too_short"  # Use same error type for context
-        elif "invalid_yes_no" in str(error.message).lower():
+        elif validation_error_type == "invalid_yes_no":
+            agent_error_type = "invalid_yes_no"
+        elif "too short" in str(error.message).lower():
+            agent_error_type = "input_too_short"
+        elif "yes/no" in str(error.message).lower():
             agent_error_type = "invalid_yes_no"
         else:
             agent_error_type = "invalid_input"
