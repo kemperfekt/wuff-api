@@ -48,7 +48,7 @@ app.add_middleware(
 session_store = SessionStore()
 
 # Initialize V2 orchestrator
-orchestrator = init_orchestrator(session_store)
+orchestrator = None
 
 # API Models - same as V1 for compatibility
 class IntroResponse(BaseModel):
@@ -62,9 +62,9 @@ class MessageRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    """Health check endpoint"""
-    logger.info(">>> V2 HEALTHCHECK SUCCESS")
-    return {"status": "ok", "version": "2.0.0"}
+    """Health check endpoint - responds immediately for Scalingo"""
+    # Don't log on every health check to avoid log spam
+    return {"status": "ok", "version": "2.0.0", "service": "wuffchat-v2"}
 
 
 @app.post("/flow_intro", response_model=IntroResponse)
@@ -265,26 +265,22 @@ async def get_prompt_debug_info():
 @app.on_event("startup")
 async def startup_event():
     """Initialize V2 services on startup"""
+    global orchestrator
+    
     logger.info("=" * 60)
     logger.info("🚀 WuffChat V2 API Starting...")
     logger.info("=" * 60)
+    
+    # Initialize orchestrator on startup to avoid blocking during request
+    orchestrator = init_orchestrator(session_store)
     
     # Log configuration
     logger.info("📋 Configuration:")
     logger.info(f"  - Session Store: {len(session_store.sessions)} active sessions")
     logger.info(f"  - V2 Orchestrator: Initialized")
     
-    # Perform health check
-    try:
-        health = await orchestrator.health_check()
-        logger.info(f"  - Overall Health: {health['overall']}")
-        logger.info(f"  - Flow Engine: {health['flow_engine']}")
-        
-        if 'services' in health:
-            for service, status in health['services'].items():
-                logger.info(f"  - {service.title()} Service: {status}")
-    except Exception as e:
-        logger.warning(f"⚠️  Startup health check failed: {e}")
+    # Skip health check during startup to avoid blocking
+    logger.info("  - Services: Will initialize on first use (lazy loading)")
     
     logger.info("=" * 60)
     logger.info("✅ V2 API Ready!")
