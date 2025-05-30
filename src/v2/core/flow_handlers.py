@@ -261,21 +261,22 @@ class FlowHandlers:
         elif response_type == "no":
             logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: no, Distance: {match_distance}")
             
-            # User said no - restart the conversation by clearing session data and returning to symptom collection
-            # Clear session data for fresh start
+            # User said no - restart the conversation completely
+            # Clear ALL session data for a true fresh start
             session.active_symptom = None
             session.context = None
             session.match_data = None
             session.match_distance = None
+            session.symptoms.clear()
+            session.awaiting_diagnosis_confirmation = False
+            session.diagnosis_confirmed = False
+            session.feedback.clear()
+            session.messages.clear()
             
-            # Show greeting message and prompt for new symptom
-            messages = await self.dog_agent.respond(AgentContext(
-                session_id=session.session_id,
-                user_input="",
-                message_type=MessageType.GREETING,
-                metadata={}
-            ))
+            # Generate the same greeting as a new conversation would
+            messages = await self.handle_greeting(session, "", {})
             
+            # Transition to WAIT_FOR_SYMPTOM with the greeting messages
             return (FlowStep.WAIT_FOR_SYMPTOM, messages)
         
     
