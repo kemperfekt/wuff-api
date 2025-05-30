@@ -1,150 +1,387 @@
-# src/agents/companion_agent.py
-import json
-import os
-from datetime import datetime, UTC, timedelta
-from pathlib import Path
-from typing import List, Dict, Any
-from src.models.flow_models import AgentMessage
-from src.services.redis_service import RedisService
+# src/v2/agents/companion_agent.py
+"""
+V2 Companion Agent - Clean message formatting for feedback collection.
 
-class CompanionAgent:
-    def __init__(self):
-        self.role = "companion"
-        # DSGVO-konformere Formulierung der letzten Frage
-        self.feedback_questions = [
-            "Hast Du das Gefühl, dass Dir die Beratung bei Deinem Anliegen weitergeholfen hat?",
-            "Wie fandest Du die Sichtweise des Hundes – was hat Dir daran gefallen oder vielleicht irritiert?",
-            "Was denkst Du über die vorgeschlagene Übung – passt sie zu Deiner Situation?",
-            "Auf einer Skala von 0-10: Wie wahrscheinlich ist es, dass Du Wuffchat weiterempfiehlst?",
-            "Optional: Deine E-Mail oder Telefonnummer für eventuelle Rückfragen. Diese wird ausschließlich für Rückfragen zu deinem Feedback verwendet und nach 3 Monaten automatisch gelöscht.",
-        ]
-        # Redis-Service initialisieren
-        self.redis_service = RedisService.get_instance()
-        
-        # Aufbewahrungsdauer in Tagen (z.B. 90 Tage = 3 Monate)
-        self.retention_days = 90
-        
-    def _prepare_feedback_data(self, session_id: str, responses: List[str], messages: List[AgentMessage]) -> Dict[str, Any]:
-        """
-        Bereitet die Feedback-Daten zur Speicherung vor.
-        """
-        # Ablaufdatum berechnen (DSGVO-konform)
-        expiration_date = (datetime.now(UTC) + timedelta(days=self.retention_days)).isoformat()
-        
-        # Feedback-Antworten vorbereiten
-        prepared_responses = []
-        
-        for question, answer in zip(self.feedback_questions, responses):
-            prepared_responses.append({
-                "question": question,
-                "answer": answer
-            })
-        
-        # Feedback-Daten zusammenstellen
-        return {
-            "session_id": session_id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "expiration_date": expiration_date,  # DSGVO-Löschfrist
-            "responses": prepared_responses,
-            "messages": [msg.model_dump() for msg in messages], 
-        }
+This agent handles ONLY message formatting for the feedback collection process.
+All business logic (saving feedback, GDPR compliance, etc.) is handled by services.
+"""
 
-    async def save_feedback(self, session_id: str, responses: List[str], messages: List[AgentMessage]):
-        """Speichert die Antworten in Redis mit DSGVO-konformer Ablaufzeit"""
-        try:
-            # Feedback-Daten vorbereiten
-            feedback_data = self._prepare_feedback_data(session_id, responses, messages)
-            
-            print(f"✅ Speichere Feedback für Session {session_id}")
-            
-            # Redis-Schlüssel definieren
-            redis_key = f"feedback:{session_id}"
-            
-            # Ablaufzeit in Sekunden berechnen (für Redis-Schlüsselablauf)
-            expire_seconds = self.retention_days * 24 * 60 * 60
-            
-            # In Redis speichern MIT Ablaufzeit
-            if self.redis_service.is_connected():
-                success = self.redis_service.set(redis_key, feedback_data, expire=expire_seconds)
-                
-                if success:
-                    print(f"✅ Feedback erfolgreich in Redis gespeichert: {redis_key}")
-                    print(f"✅ Automatische Löschung nach {self.retention_days} Tagen eingestellt")
-                    
-                    # Zum Feedback-Index hinzufügen für einfache Abfrage aller Feedbacks
-                    all_feedback_key = "all_feedback_ids"
-                    all_ids = self.redis_service.get(all_feedback_key) or []
-                    if session_id not in all_ids:
-                        all_ids.append(session_id)
-                        self.redis_service.set(all_feedback_key, all_ids)
-                    
-                    return
-                else:
-                    print("⚠️ Fehler beim Speichern in Redis")
-            else:
-                print("⚠️ Redis nicht verbunden, Feedback kann nicht gespeichert werden")
-            
-            # Lokale Speicherung als Fallback
-            base_path = os.environ.get("SESSION_LOG_PATH", "data")
-            feedback_dir = Path(base_path)
-            
-            try:
-                # Verzeichnis erstellen, falls es nicht existiert
-                feedback_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Feedback als JSON speichern
-                file_path = feedback_dir / f"feedback_{session_id}.json"
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(feedback_data, f, ensure_ascii=False, indent=2)
-                
-                print(f"✅ Feedback lokal gespeichert: {file_path}")
-            except Exception as e:
-                print(f"❌ Fehler bei der lokalen Speicherung: {e}")
-                raise
-        
-        except Exception as e:
-            print(f"⚠️ Fehler beim Speichern des Feedbacks: {e} — Feedback wird nicht gespeichert.")
+from typing import List, Dict, Optional, Any
+from src.agents.base_agent import BaseAgent, AgentContext, MessageType, V2AgentMessage
+from src.core.prompt_manager import PromptType
+from src.core.exceptions import V2AgentError, V2ValidationError
 
-    def get_intro_messages(self) -> List[AgentMessage]:
+
+class CompanionAgent(BaseAgent):
+    """
+    Agent that formats feedback collection messages.
+    
+    Responsibilities:
+    - Format feedback questions in sequence
+    - Generate feedback completion messages
+    - Handle feedback-related instructions
+    - Format thank you messages
+    
+    Business logic like feedback storage, GDPR compliance, etc. 
+    is handled by the flow engine and services.
+    """
+    
+    def __init__(self, **kwargs):
+        """Initialize CompanionAgent with feedback-specific configuration."""
+        super().__init__(
+            name="Begleiter",
+            role="companion",
+            **kwargs
+        )
+        
+        # Companion-specific message configuration
+        self._default_temperature = 0.3  # More consistent for feedback questions
+        
+        # Feedback question sequence (will be loaded from PromptManager)
+        self._feedback_question_count = 5
+        
+    def get_supported_message_types(self) -> List[MessageType]:
+        """Return message types this agent supports."""
         return [
-            AgentMessage(sender=self.role, text="Ich würde mich freuen, wenn du mir noch ein kurzes Feedback gibst."),
-            *[
-                AgentMessage(sender=self.role, text=question)
-                for question in self.feedback_questions
-            ],
+            MessageType.GREETING,
+            MessageType.QUESTION,
+            MessageType.RESPONSE,
+            MessageType.CONFIRMATION,
+            MessageType.ERROR
         ]
+    
+    async def respond(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate companion messages based on context.
         
-    async def cleanup_expired_feedback(self):
-        """Löscht abgelaufene Feedback-Daten (DSGVO-Compliance)"""
-        if not self.redis_service.is_connected():
-            print("⚠️ Redis nicht verbunden, Bereinigung nicht möglich")
-            return
+        Args:
+            context: Agent context with user input and metadata
             
-        all_ids = self.redis_service.get("all_feedback_ids") or []
-        current_date = datetime.now(UTC)
-        removed_ids = []
+        Returns:
+            List of formatted companion messages
+            
+        Raises:
+            V2AgentError: If message generation fails
+            V2ValidationError: If context is invalid
+        """
+        # Validate context - but catch validation errors and handle gracefully
+        try:
+            self.validate_context(context)
+        except V2ValidationError as e:
+            # Return error message instead of raising exception
+            return [self.create_error_message(str(e))]
         
-        for session_id in all_ids:
-            feedback = self.redis_service.get(f"feedback:{session_id}")
-            if not feedback:
-                removed_ids.append(session_id)
-                continue
+        try:
+            # Route to appropriate message handler based on message type
+            if context.message_type == MessageType.GREETING:
+                return await self._handle_greeting(context)
+            elif context.message_type == MessageType.QUESTION:
+                return await self._handle_question(context)
+            elif context.message_type == MessageType.RESPONSE:
+                return await self._handle_response(context)
+            elif context.message_type == MessageType.CONFIRMATION:
+                return await self._handle_confirmation(context)
+            elif context.message_type == MessageType.ERROR:
+                return await self._handle_error(context)
+            else:
+                raise V2AgentError(f"Unsupported message type: {context.message_type}")
                 
-            # Prüfen, ob das Ablaufdatum erreicht ist
-            expiration_date = feedback.get("expiration_date")
-            if expiration_date:
-                try:
-                    exp_date = datetime.fromisoformat(expiration_date)
-                    if current_date > exp_date:
-                        # Feedback löschen
-                        self.redis_service.delete(f"feedback:{session_id}")
-                        removed_ids.append(session_id)
-                        print(f"🗑️ Abgelaufenes Feedback gelöscht: {session_id}")
-                except (ValueError, TypeError):
-                    pass
+        except Exception as e:
+            # Fallback to error message if anything goes wrong
+            return [self.create_error_message(str(e))]
+    
+    async def _handle_greeting(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate feedback introduction message.
         
-        # Bereinigte IDs aus dem Index entfernen
-        if removed_ids:
-            updated_ids = [id for id in all_ids if id not in removed_ids]
-            self.redis_service.set("all_feedback_ids", updated_ids)
-            print(f"🧹 {len(removed_ids)} abgelaufene Feedback-Einträge bereinigt")
+        Args:
+            context: Agent context
+            
+        Returns:
+            List with feedback introduction message
+        """
+        intro_text = self.prompt_manager.get_prompt(PromptType.COMPANION_FEEDBACK_INTRO)
+        return [self.create_message(intro_text, MessageType.GREETING)]
+    
+    async def _handle_question(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate feedback questions based on question number.
+        
+        Args:
+            context: Agent context with question_number in metadata
+            
+        Returns:
+            List with feedback question message
+        """
+        question_number = context.metadata.get('question_number', 1)
+        
+        # Validate question number
+        if not (1 <= question_number <= self._feedback_question_count):
+            raise V2AgentError(f"Invalid question number: {question_number}")
+        
+        # Get the appropriate feedback question from PromptManager
+        question_text = self._get_feedback_question(question_number)
+        
+        return [self.create_message(question_text, MessageType.QUESTION)]
+    
+    async def _handle_response(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate response messages for feedback flow.
+        
+        The type of response depends on context metadata:
+        - 'acknowledgment': Acknowledge received feedback
+        - 'completion': Final thank you message
+        - 'progress': Progress indicator between questions
+        
+        Args:
+            context: Agent context with response data
+            
+        Returns:
+            List of response messages
+        """
+        response_mode = context.metadata.get('response_mode', 'acknowledgment')
+        
+        if response_mode == 'acknowledgment':
+            return await self._generate_acknowledgment(context)
+        elif response_mode == 'completion':
+            return await self._generate_completion(context)
+        elif response_mode == 'progress':
+            return await self._generate_progress(context)
+        else:
+            raise V2AgentError(f"Unknown response mode: {response_mode}")
+    
+    async def _handle_confirmation(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate confirmation messages for feedback process.
+        
+        Args:
+            context: Agent context
+            
+        Returns:
+            List with confirmation message
+        """
+        confirmation_type = context.metadata.get('confirmation_type', 'proceed')
+        
+        if confirmation_type == 'proceed':
+            text = self.prompt_manager.get_prompt(PromptType.COMPANION_PROCEED_CONFIRMATION)
+        elif confirmation_type == 'skip':
+            text = self.prompt_manager.get_prompt(PromptType.COMPANION_SKIP_CONFIRMATION)
+        else:
+            text = "Möchtest du fortfahren?"
+        
+        return [self.create_message(text, MessageType.CONFIRMATION)]
+    
+    async def _handle_error(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate error messages for feedback process.
+        
+        Args:
+            context: Agent context
+            
+        Returns:
+            List with error message
+        """
+        error_type = context.metadata.get('error_type', 'general')
+        
+        if error_type == 'invalid_feedback':
+            text = self.prompt_manager.get_prompt(PromptType.COMPANION_INVALID_FEEDBACK_ERROR)
+        elif error_type == 'save_failed':
+            text = self.prompt_manager.get_prompt(PromptType.COMPANION_SAVE_ERROR)
+        else:
+            text = "Es gab ein Problem mit dem Feedback. Bitte versuche es erneut."
+        
+        return [self.create_message(text, MessageType.ERROR)]
+    
+    def _get_feedback_question(self, question_number: int) -> str:
+        """
+        Get feedback question by number from PromptManager.
+        
+        Args:
+            question_number: Question number (1-5)
+            
+        Returns:
+            Formatted feedback question text
+            
+        Raises:
+            V2AgentError: If question not found
+        """
+        try:
+            # Map question numbers to prompt types
+            question_map = {
+                1: PromptType.COMPANION_FEEDBACK_Q1,
+                2: PromptType.COMPANION_FEEDBACK_Q2,
+                3: PromptType.COMPANION_FEEDBACK_Q3,
+                4: PromptType.COMPANION_FEEDBACK_Q4,
+                5: PromptType.COMPANION_FEEDBACK_Q5,
+            }
+            
+            prompt_type = question_map.get(question_number)
+            if not prompt_type:
+                raise V2AgentError(f"No prompt found for question number {question_number}")
+            
+            return self.prompt_manager.get_prompt(prompt_type)
+            
+        except Exception as e:
+            raise V2AgentError(f"Failed to get feedback question {question_number}: {str(e)}") from e
+    
+    async def _generate_acknowledgment(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate acknowledgment message for received feedback.
+        
+        Args:
+            context: Agent context
+            
+        Returns:
+            List with acknowledgment message
+        """
+        # Simple acknowledgment for continuing feedback flow
+        ack_text = self.prompt_manager.get_prompt(PromptType.COMPANION_FEEDBACK_ACK)
+        return [self.create_message(ack_text, MessageType.RESPONSE)]
+    
+    async def _generate_completion(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate completion message after all feedback collected.
+        
+        Args:
+            context: Agent context
+            
+        Returns:
+            List with completion/thank you message
+        """
+        # Check if feedback was successfully saved
+        save_success = context.metadata.get('save_success', True)
+        
+        if save_success:
+            completion_text = self.prompt_manager.get_prompt(PromptType.COMPANION_FEEDBACK_COMPLETE)
+        else:
+            completion_text = self.prompt_manager.get_prompt(PromptType.COMPANION_FEEDBACK_COMPLETE_NOSAVE)
+        
+        return [self.create_message(completion_text, MessageType.RESPONSE)]
+    
+    async def _generate_progress(self, context: AgentContext) -> List[V2AgentMessage]:
+        """
+        Generate progress indicator message between questions.
+        
+        Args:
+            context: Agent context with progress info
+            
+        Returns:
+            List with progress message (optional - can be empty)
+        """
+        # For now, we don't show progress indicators
+        # This could be enhanced to show "Frage 2 von 5" etc.
+        return []
+    
+    def get_feedback_question_count(self) -> int:
+        """
+        Get the total number of feedback questions.
+        
+        Returns:
+            Number of feedback questions
+        """
+        return self._feedback_question_count
+    
+    def validate_question_number(self, question_number: int) -> bool:
+        """
+        Validate if a question number is valid.
+        
+        Args:
+            question_number: Question number to validate
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        # Handle non-integer types
+        if not isinstance(question_number, int):
+            return False
+            
+        return 1 <= question_number <= self._feedback_question_count
+    
+    def _validate_context_impl(self, context: AgentContext) -> None:
+        """
+        Validate companion-specific context requirements.
+        
+        Args:
+            context: Context to validate
+            
+        Raises:
+            V2ValidationError: If context is invalid for companion agent
+        """
+        # For question messages, we need a question number
+        if context.message_type == MessageType.QUESTION:
+            question_number = context.metadata.get('question_number')
+            if question_number is None:
+                raise V2ValidationError("Question context requires 'question_number' in metadata")
+            
+            if not self.validate_question_number(question_number):
+                raise V2ValidationError(f"Invalid question number: {question_number}")
+        
+        # For response messages, we need a response mode
+        if context.message_type == MessageType.RESPONSE:
+            response_mode = context.metadata.get('response_mode')
+            if not response_mode:
+                raise V2ValidationError("Response context requires 'response_mode' in metadata")
+    
+    def create_error_message(self, error_msg: str) -> V2AgentMessage:
+        """
+        Override to create companion-specific error messages.
+        
+        Args:
+            error_msg: Technical error message
+            
+        Returns:
+            Companion-friendly error message
+        """
+        # Get companion-specific error message from prompts
+        try:
+            friendly_msg = self.prompt_manager.get_prompt(PromptType.COMPANION_GENERAL_ERROR)
+        except:
+            # Ultimate fallback
+            friendly_msg = "Es tut mir leid, es gab ein Problem. Bitte versuche es erneut."
+        
+        return self.create_message(friendly_msg, MessageType.ERROR)
+    
+    async def create_feedback_sequence(self, session_id: str) -> List[AgentContext]:
+        """
+        Helper method to create context sequence for complete feedback flow.
+        
+        This is a utility method that the flow engine can use to get all
+        contexts needed for the complete feedback sequence.
+        
+        Args:
+            session_id: Session ID for the feedback flow
+            
+        Returns:
+            List of AgentContext objects for the complete feedback sequence
+        """
+        contexts = []
+        
+        # Add intro context
+        contexts.append(AgentContext(
+            session_id=session_id,
+            message_type=MessageType.GREETING,
+            metadata={'sequence_step': 'intro'}
+        ))
+        
+        # Add question contexts
+        for i in range(1, self._feedback_question_count + 1):
+            contexts.append(AgentContext(
+                session_id=session_id,
+                message_type=MessageType.QUESTION,
+                metadata={
+                    'question_number': i,
+                    'sequence_step': f'question_{i}'
+                }
+            ))
+        
+        # Add completion context
+        contexts.append(AgentContext(
+            session_id=session_id,
+            message_type=MessageType.RESPONSE,
+            metadata={
+                'response_mode': 'completion',
+                'sequence_step': 'completion'
+            }
+        ))
+        
+        return contexts
