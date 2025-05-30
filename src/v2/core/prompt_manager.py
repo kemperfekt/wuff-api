@@ -49,7 +49,7 @@ class PromptType(str, Enum):
     DOG_NO_MATCH_ERROR = "dog.no.match.error"
     DOG_INVALID_INPUT_ERROR = "dog.invalid.input.error"
     DOG_TECHNICAL_ERROR = "dog.technical.error"
-    DOG_DESCRIBE_MORE = "dog.describe.more"
+    DOG_DESCRIBE_MORE = "dog.need.more.detail"
     DOG_BE_SPECIFIC = "dog.be.specific"
     DOG_ANOTHER_BEHAVIOR_QUESTION = "dog.another.behavior.question"
     DOG_FALLBACK_EXERCISE = "dog.fallback.exercise"

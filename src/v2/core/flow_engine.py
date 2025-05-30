@@ -319,6 +319,8 @@ class FlowEngine:
             if isinstance(result, tuple) and len(result) == 2:
                 next_state, messages = result
                 
+                logger.debug(f"Confirmation handler returned: next_state={next_state}, messages={len(messages)}")
+                
                 # Handle different outcomes
                 if next_state == FlowStep.WAIT_FOR_CONTEXT:
                     # User said yes, proceed normally
@@ -329,6 +331,7 @@ class FlowEngine:
                     return messages
                 elif next_state == 'stay_in_state':
                     # Invalid input, stay in current state
+                    logger.debug("Invalid yes/no input, staying in current state")
                     context['next_event'] = 'stay_in_state'
                     return messages
                 else:
@@ -398,7 +401,7 @@ class FlowEngine:
                     session_id=session.session_id,
                     user_input=user_input,
                     message_type=MessageType.INSTRUCTION,
-                    metadata={'instruction_type': 'be_specific'}
+                    metadata={'instruction_type': 'describe_more'}
                 )
                 
                 messages = await self.handlers.dog_agent.respond(agent_context)
@@ -597,6 +600,7 @@ class FlowEngine:
         # Check if transition is valid
         if not self.can_transition(current_state, event, session, user_input, context):
             valid_events = [t.event.value for t in self.get_valid_transitions(current_state)]
+            logger.warning(f"Invalid transition: {current_state.value} + {event.value}. Valid events: {valid_events}")
             raise V2FlowError(
                 current_state=current_state.value,
                 message=f"Invalid transition: {current_state.value} + {event.value}. Valid events: {valid_events}"
