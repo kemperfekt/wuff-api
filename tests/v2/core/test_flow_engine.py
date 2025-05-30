@@ -102,7 +102,7 @@ class TestFlowEngineFSM:
             
             # Test confirmation state  
             confirmation_transitions = engine.get_valid_transitions(FlowStep.WAIT_FOR_CONFIRMATION)
-            assert len(confirmation_transitions) >= 3  # YES + NO + RESTART
+            assert len(confirmation_transitions) >= 2  # USER_INPUT + RESTART
             
             # Verify types
             for transition in greeting_transitions:
