@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import timedelta
 
-from src.services.redis_service_original import (
+from src.services.redis_service import (
     RedisService,
     RedisConfig,
     create_redis_service,
@@ -63,7 +63,7 @@ async def redis_service(mock_config, mock_redis_client):
     service = RedisService(mock_config)
     
     # Patch the client creation
-    with patch('src.services.redis_service_original.redis.from_url', return_value=mock_redis_client):
+    with patch('src.services.redis_service.redis.from_url', return_value=mock_redis_client):
         await service.initialize()
     
     return service
@@ -79,7 +79,7 @@ class TestRedisService:
         assert service.config == mock_config
         assert not service.is_initialized
         
-        with patch('src.services.redis_service_original.redis.from_url', return_value=mock_redis_client):
+        with patch('src.services.redis_service.redis.from_url', return_value=mock_redis_client):
             await service.initialize()
         
         assert service.is_initialized
@@ -118,7 +118,7 @@ class TestRedisService:
         failing_client = AsyncMock()
         failing_client.ping.side_effect = Exception("Connection refused")
         
-        with patch('src.services.redis_service_original.redis.from_url', return_value=failing_client):
+        with patch('src.services.redis_service.redis.from_url', return_value=failing_client):
             # Should not raise but log warning
             await service.initialize()
         
@@ -314,7 +314,7 @@ class TestRedisServiceFactory:
     
     async def test_create_redis_service(self, mock_redis_client):
         """Test service creation via factory"""
-        with patch('src.services.redis_service_original.redis.from_url', return_value=mock_redis_client):
+        with patch('src.services.redis_service.redis.from_url', return_value=mock_redis_client):
             service = await create_redis_service(
                 url="redis://factory:6379",
                 socket_timeout=10.0
@@ -327,7 +327,7 @@ class TestRedisServiceFactory:
     
     async def test_singleton(self, mock_redis_client):
         """Test singleton pattern"""
-        with patch('src.services.redis_service_original.redis.from_url', return_value=mock_redis_client):
+        with patch('src.services.redis_service.redis.from_url', return_value=mock_redis_client):
             # First call creates instance
             service1 = await get_redis_singleton()
             
