@@ -59,8 +59,7 @@ class TestFlowEngineFSM:
             expected_transitions = [
                 (FlowStep.GREETING, FlowEvent.START_SESSION),
                 (FlowStep.WAIT_FOR_SYMPTOM, FlowEvent.USER_INPUT),
-                (FlowStep.WAIT_FOR_CONFIRMATION, FlowEvent.YES_RESPONSE),
-                (FlowStep.WAIT_FOR_CONFIRMATION, FlowEvent.NO_RESPONSE),
+                (FlowStep.WAIT_FOR_CONFIRMATION, FlowEvent.USER_INPUT),  # Changed: Now uses USER_INPUT
                 (FlowStep.WAIT_FOR_CONTEXT, FlowEvent.USER_INPUT),
                 (FlowStep.ASK_FOR_EXERCISE, FlowEvent.YES_RESPONSE),
                 (FlowStep.ASK_FOR_EXERCISE, FlowEvent.NO_RESPONSE),

@@ -100,21 +100,21 @@ class TestSymptomInputHandler:
         """Test handling of too short symptom input"""
         handlers = FlowHandlers(dog_agent=mock_dog_agent)
         
-        # Execute with short input
-        next_event, messages = await handlers.handle_symptom_input(
-            sample_session,
-            "kurz",  # Too short
-            {}
-        )
+        # Execute with short input - should raise V2ValidationError
+        with pytest.raises(V2ValidationError) as exc_info:
+            await handlers.handle_symptom_input(
+                sample_session,
+                "kurz",  # Too short
+                {}
+            )
         
-        # Verify
-        assert next_event == "stay_in_state"
-        assert len(messages) >= 1
-        
-        # Check agent context for "input_too_short" error
-        call_args = mock_dog_agent.respond.call_args[0][0]
-        assert call_args.message_type == MessageType.ERROR
-        assert call_args.metadata['error_type'] == 'input_too_short'
+        # Verify error details
+        error = exc_info.value
+        assert error.field == "user_input"
+        assert error.value == "kurz"
+        assert "too short" in error.message.lower()
+        assert error.details['min_length'] == 10
+        assert error.details['actual_length'] == 4
     
     @pytest.mark.asyncio
     async def test_no_symptom_match_found(self, sample_session, mock_dog_agent, mock_services_bundle):
@@ -213,18 +213,21 @@ class TestContextInputHandler:
         """Test handling of too short context input"""
         handlers = FlowHandlers(dog_agent=mock_dog_agent)
         
-        # Execute with short context
-        messages = await handlers.handle_context_input(
-            sample_session,
-            "ja",  # Too short
-            {}
-        )
+        # Execute with short context - should raise V2ValidationError
+        with pytest.raises(V2ValidationError) as exc_info:
+            await handlers.handle_context_input(
+                sample_session,
+                "ja",  # Too short
+                {}
+            )
         
-        # Verify instruction to be more specific
-        assert len(messages) >= 1
-        call_args = mock_dog_agent.respond.call_args[0][0]
-        assert call_args.message_type == MessageType.INSTRUCTION
-        assert call_args.metadata['instruction_type'] == 'be_specific'
+        # Verify error details
+        error = exc_info.value
+        assert error.field == "user_input"
+        assert error.value == "ja"
+        assert "too short" in error.message.lower()
+        assert error.details['min_length'] == 5
+        assert error.details['actual_length'] == 2
     
     @pytest.mark.asyncio
     async def test_context_analysis_error_fallback(self, sample_session, mock_dog_agent, mock_services_bundle):
@@ -642,9 +645,10 @@ class TestErrorHandling:
         )
         
         # Should not crash, should return fallback responses
+        # Increase input length to pass validation
         next_event, messages = await handlers.handle_symptom_input(
             sample_session,
-            "test symptom",
+            "Mein Hund hat ein Problem mit dem Verhalten",  # Long enough
             {}
         )
         
