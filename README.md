@@ -1,13 +1,13 @@
 # DogBot Agent (Backend API)
 
-This is the backend API service for DogBot. For comprehensive documentation, please refer to the [main DogBot README](../README.md).
+This is the backend API service for DogBot. For comprehensive documentation, please refer to the [main DogBot README](https://github.com/kemperfekt/dogbot).
 
 ## Quick Links
 
-- 📚 [Full Documentation](../README.md)
-- 🏗️ [Architecture Overview](../README.md#️-architecture-overview)
-- 🚀 [Quick Start Guide](../README.md#-quick-start)
-- 🔧 [Development Setup](../README.md#-development)
+- 📚 [Full Documentation](https://github.com/kemperfekt/dogbot)
+- 🏗️ [Architecture Overview](https://github.com/kemperfekt/dogbot#-architecture-overview)
+- 🚀 [Quick Start Guide](https://github.com/kemperfekt/dogbot#-quick-start)
+- 🔧 [Development Setup](https://github.com/kemperfekt/dogbot#-development)
 - 📊 [API Documentation](https://api.wuffchat.de/docs)
 
 ## Local Development
@@ -19,7 +19,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Run
-uvicorn src.v2.main:app --reload --port 8000
+uvicorn src.main:app --reload --port 8000
 
 # Test
 pytest
@@ -32,4 +32,4 @@ pytest
 - 11-state conversation flow
 - Comprehensive test coverage
 
-For detailed information, see the [main repository documentation](../README.md).
+For detailed information, see the [main repository documentation](https://github.com/kemperfekt/dogbot).
