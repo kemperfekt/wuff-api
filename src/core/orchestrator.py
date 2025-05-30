@@ -54,10 +54,36 @@ class V2Orchestrator:
         # Initialize V2 components
         if flow_engine:
             self.flow_engine = flow_engine
+            # Mark as already initialized if provided
+            self._services_initialized = True
         else:
-            # Create flow engine with all V2 services
-            logger.info("Initializing V2 services and flow engine...")
+            # Defer service initialization to avoid blocking startup
+            logger.info("V2 orchestrator created (services will be lazy-loaded)")
+            self.flow_engine = None
+            self._services_initialized = False
             
+            # Initialize empty service references
+            self.prompt_manager = None
+            self.gpt_service = None
+            self.weaviate_service = None
+            self.redis_service = None
+            self.flow_handlers = None
+        
+        self.enable_logging = enable_logging
+        logger.info("V2 Orchestrator initialized successfully")
+    
+    async def _ensure_services_initialized(self):
+        """
+        Lazy initialization of services to avoid blocking startup.
+        
+        This method is called automatically before any operation that needs services.
+        """
+        if self._services_initialized:
+            return
+            
+        logger.info("Initializing V2 services (lazy loading)...")
+        
+        try:
             # Initialize services
             self.prompt_manager = PromptManager()
             self.gpt_service = GPTService()
@@ -74,9 +100,13 @@ class V2Orchestrator:
             
             # Initialize flow engine with handlers
             self.flow_engine = FlowEngine(self.flow_handlers)
-        
-        self.enable_logging = enable_logging
-        logger.info("V2 Orchestrator initialized successfully")
+            
+            self._services_initialized = True
+            logger.info("V2 services initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize V2 services: {e}")
+            raise
     
     async def handle_message(self, session_id: str, user_input: str) -> List[Dict[str, Any]]:
         """
@@ -92,6 +122,9 @@ class V2Orchestrator:
             List of message dictionaries compatible with V1 format
         """
         try:
+            # Ensure services are initialized before processing
+            await self._ensure_services_initialized()
+            
             if self.enable_logging:
                 logger.info(f"V2 handling message for session {session_id}: '{user_input[:50]}...'")
             
@@ -190,6 +223,9 @@ class V2Orchestrator:
             List of greeting messages
         """
         try:
+            # Ensure services are initialized before processing
+            await self._ensure_services_initialized()
+            
             logger.info(f"Starting new V2 conversation for session {session_id}")
             
             # Get or create session
@@ -363,6 +399,17 @@ class V2Orchestrator:
         }
         
         try:
+            # Check if services are initialized
+            if not self._services_initialized:
+                health_status["flow_engine"] = "not_initialized"
+                health_status["services"]["status"] = "lazy_loading_enabled"
+                health_status["overall"] = "ready"
+                health_status["summary"] = {
+                    "session_count": len(self.session_store.sessions),
+                    "services_initialized": False
+                }
+                return health_status
+            
             # Check flow engine
             summary = self.flow_engine.get_flow_summary()
             issues = self.flow_engine.validate_fsm()

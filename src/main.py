@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
+from contextlib import asynccontextmanager
 import logging
 
 # V2 imports - the key difference from V1
@@ -18,11 +19,12 @@ from src.models.session_state import SessionStore
 from src.models.flow_models import FlowStep
 from src.core.logging_config import setup_logging
 
-# Initialize FastAPI app
+# Initialize FastAPI app with lifespan
 app = FastAPI(
     title="WuffChat V2 API",
     description="V2 implementation with FSM-based flow engine",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # Setup logging
@@ -261,36 +263,32 @@ async def get_prompt_debug_info():
 #    }
 
 
-# Startup event for initialization
-@app.on_event("startup")
-async def startup_event():
-    """Initialize V2 services on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan event handler for startup/shutdown"""
     global orchestrator
     
+    # Startup
     logger.info("=" * 60)
     logger.info("🚀 WuffChat V2 API Starting...")
     logger.info("=" * 60)
     
-    # Initialize orchestrator on startup to avoid blocking during request
+    # Initialize orchestrator with lazy loading to avoid blocking health checks
     orchestrator = init_orchestrator(session_store)
     
     # Log configuration
     logger.info("📋 Configuration:")
     logger.info(f"  - Session Store: {len(session_store.sessions)} active sessions")
-    logger.info(f"  - V2 Orchestrator: Initialized")
-    
-    # Skip health check during startup to avoid blocking
-    logger.info("  - Services: Will initialize on first use (lazy loading)")
+    logger.info(f"  - V2 Orchestrator: Initialized (services lazy-loaded)")
+    logger.info("  - Services: Will initialize on first use")
     
     logger.info("=" * 60)
     logger.info("✅ V2 API Ready!")
     logger.info("=" * 60)
-
-
-# Shutdown event for cleanup
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
+    
+    yield
+    
+    # Shutdown
     logger.info("🛑 WuffChat V2 API Shutting down...")
     # Add any cleanup code here if needed
     logger.info("👋 Goodbye!")
