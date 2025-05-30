@@ -263,15 +263,14 @@ class FlowHandlers:
             
             # User said no - restart the conversation completely
             # Clear ALL session data for a true fresh start
-            session.active_symptom = None
-            session.context = None
-            session.match_data = None
+            session.active_symptom = ""
             session.match_distance = None
             session.symptoms.clear()
             session.awaiting_diagnosis_confirmation = False
             session.diagnosis_confirmed = False
             session.feedback.clear()
             session.messages.clear()
+            session.agent_status.clear()
             
             logger.info("Session data cleared, generating greeting messages...")
             
