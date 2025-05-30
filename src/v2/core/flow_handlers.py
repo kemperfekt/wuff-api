@@ -261,15 +261,19 @@ class FlowHandlers:
         elif response_type == "no":
             logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: no, Distance: {match_distance}")
             
-            # User doesn't want deeper analysis, offer to describe new behavior directly
+            # User said no - restart the conversation by clearing session data and returning to symptom collection
+            # Clear session data for fresh start
+            session.active_symptom = None
+            session.context = None
+            session.match_data = None
+            session.match_distance = None
+            
+            # Show greeting message and prompt for new symptom
             messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input="",
-                message_type=MessageType.RESPONSE,
-                metadata={
-                    "response_mode": "perspective_only",
-                    "match_data": "Okay, kein Problem. Beschreibe mir gerne ein anderes Verhalten."
-                }
+                message_type=MessageType.GREETING,
+                metadata={}
             ))
             
             return (FlowStep.WAIT_FOR_SYMPTOM, messages)
