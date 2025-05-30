@@ -2,7 +2,7 @@
 
 ## Project Overview
 - **Start Date**: May 24, 2025
-- **Current Branch**: refactor/prompts
+- **Current Branch**: main
 
 
 ## Context for New Chat Sessions
@@ -150,10 +150,10 @@ src/
 - [x] All Bugs fixed & test suite green
 - [x] Specific error messages implemented
 - [x] Test suite fully green (119 tests passing)
-- [ ] Deployed to Scalingo
-- [ ] Switch DNS/routing to V2
-- [ ] Monitor for issues
-- [ ] Keep V1 as backup (git tag)
+- [x] Deployed to Scalingo
+- [x] Switch DNS/routing to V2
+- [x] Monitor for issues
+- [x] Keep V1 as backup (git tag)
 - [ ] **COMMIT**: "feat: V2 switch-over execution"
 
 ### Phase 8: Post-Switch Validation
@@ -168,8 +168,8 @@ src/
 - [ ] **COMMIT**: "refactor: Complete migration to v2"
 
 ## Current Status
-**Currently Working On**: Phase 7 - Production Deployment
-**Next Step**: Deploy V2 to Scalingo
+**Currently Working On**: Phase 8
+**Next Step**: Clean up
 **Blockers**: None
 **Test Status**: ✅ 119 tests passing, 0 failures
 
@@ -188,6 +188,9 @@ src/
 **Date**: May 25, 2025
 **Reason**: MVP stage with no real users makes switch-over safer and much simpler than parallel systems.
 **Impact**: Removes need for feature flags, compatibility layers, and complex integration. V2 will be completely independent.
+
+## Recent Decision (Phase 7)
+- **Frontend Stack**: Will port frontend to Vite after backend refactoring
 
 ## Code Examples for Reference
 
@@ -272,7 +275,7 @@ RUN_INTEGRATION_TESTS=false
 - [✅] All flows work correctly (V2 significantly improves on V1)
 - [✅] Comprehensive test coverage (119 tests)
 - [✅] Specific error messages for better UX
-- [ ] Production deployment completed
+- [✅] Production deployment completed
 - [ ] Response time ≤ current implementation (to be measured)
 - [ ] Error rate < 1% (to be measured in production)
 
