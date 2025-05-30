@@ -16,7 +16,7 @@ import logging
 from src.v2.core.orchestrator import V2Orchestrator, init_orchestrator
 from src.v2.models.session_state import SessionStore
 from src.v2.models.flow_models import FlowStep
-from src.core.config import setup_logging
+from src.v2.core.logging_config import setup_logging
 
 # Initialize FastAPI app
 app = FastAPI(

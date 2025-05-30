@@ -101,7 +101,7 @@ class V2Orchestrator:
             # Add user message to session history if not empty
             if user_input.strip():
                 # Convert V2AgentMessage to V1 format for session storage
-                from src.models.flow_models import AgentMessage
+                from src.v2.models.flow_models import AgentMessage
                 user_message = AgentMessage(sender="user", text=user_input.strip())
                 session.messages.append(user_message)
             
@@ -208,7 +208,7 @@ class V2Orchestrator:
             response_messages = []
             for v2_msg in v2_messages:
                 # Store in session
-                from src.models.flow_models import AgentMessage
+                from src.v2.models.flow_models import AgentMessage
                 v1_message = AgentMessage(sender=v2_msg.sender, text=v2_msg.text)
                 session.messages.append(v1_message)
                 
