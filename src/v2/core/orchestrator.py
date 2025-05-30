@@ -168,10 +168,9 @@ class V2Orchestrator:
             
         except V2ValidationError as e:
             logger.error(f"V2 Validation error: {e.message}")
-            return self._create_error_response(
-                "Ich habe deine Eingabe nicht verstanden. Kannst du es anders formulieren?",
-                session_id
-            )
+            # Convert validation error to appropriate agent response
+            error_messages = await self._handle_validation_error(e, session_id)
+            return error_messages
             
         except Exception as e:
             logger.error(f"Unexpected error in V2 orchestrator: {e}", exc_info=True)
@@ -276,6 +275,72 @@ class V2Orchestrator:
             "message_type": "error",
             "metadata": {"error": True}
         }]
+    
+    async def _handle_validation_error(self, error: V2ValidationError, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Convert validation error to appropriate agent response.
+        
+        Args:
+            error: V2ValidationError containing validation details
+            session_id: Session identifier
+            
+        Returns:
+            List of error message dictionaries
+        """
+        from src.v2.agents.base_agent import AgentContext, MessageType
+        
+        # Get error type from validation details - map validation to agent error types
+        error_details = error.details or {}
+        
+        # Use the error details from the ValidationService directly
+        if "input_too_short" in str(error.message).lower():
+            agent_error_type = "input_too_short"
+        elif "context_too_short" in str(error.message).lower():
+            agent_error_type = "input_too_short"  # Use same error type for context
+        elif "invalid_yes_no" in str(error.message).lower():
+            agent_error_type = "invalid_yes_no"
+        else:
+            agent_error_type = "invalid_input"
+        
+        try:
+            # Create agent context for error response
+            agent_context = AgentContext(
+                session_id=session_id,
+                user_input=str(error.value) if error.value else "",
+                message_type=MessageType.ERROR,
+                metadata={"error_type": agent_error_type}
+            )
+            
+            # Get dog agent instance from flow handlers
+            dog_agent = self.flow_handlers.dog_agent if hasattr(self, 'flow_handlers') else None
+            if not dog_agent:
+                # Fallback to generic error
+                return self._create_error_response(
+                    "Ich habe deine Eingabe nicht verstanden. Kannst du es anders formulieren?",
+                    session_id
+                )
+            
+            # Generate agent response
+            v2_messages = await dog_agent.respond(agent_context)
+            
+            # Convert to API format
+            return [
+                {
+                    "sender": msg.sender,
+                    "text": msg.text,
+                    "message_type": msg.message_type,
+                    "metadata": msg.metadata
+                }
+                for msg in v2_messages
+            ]
+            
+        except Exception as e:
+            logger.error(f"Error generating validation error response: {e}")
+            # Fallback to generic error
+            return self._create_error_response(
+                "Ich habe deine Eingabe nicht verstanden. Kannst du es anders formulieren?",
+                session_id
+            )
     
     async def health_check(self) -> Dict[str, Any]:
         """

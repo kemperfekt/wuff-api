@@ -18,6 +18,7 @@ from src.v2.agents.base_agent import AgentContext, MessageType, V2AgentMessage
 from src.v2.services.gpt_service import GPTService
 from src.v2.services.weaviate_service import WeaviateService
 from src.v2.services.redis_service import RedisService
+from src.v2.services.validation_service import ValidationService
 from src.v2.core.prompt_manager import PromptManager, PromptType
 from src.v2.core.exceptions import V2FlowError, V2ValidationError
 
@@ -39,7 +40,8 @@ class FlowHandlers:
         gpt_service: Optional[GPTService] = None,
         weaviate_service: Optional[WeaviateService] = None,
         redis_service: Optional[RedisService] = None,
-        prompt_manager: Optional[PromptManager] = None
+        prompt_manager: Optional[PromptManager] = None,
+        validation_service: Optional[ValidationService] = None
     ):
         """
         Initialize flow handlers with V2 services and agents.
@@ -57,6 +59,7 @@ class FlowHandlers:
         self.gpt_service = gpt_service or GPTService()
         self.weaviate_service = weaviate_service or WeaviateService()
         self.redis_service = redis_service or RedisService()
+        self.validation_service = validation_service or ValidationService()
         
         # Initialize agents with services
         self.dog_agent = dog_agent or DogAgent(
@@ -116,16 +119,16 @@ class FlowHandlers:
         """Handle user's symptom description with semantic search"""
         logger.info(f"Handling symptom input: '{user_input[:50]}...'")
         
-        # Validate input length
-        if len(user_input) < 10:
-            logger.info(f"Input too short ({len(user_input)} chars): '{user_input}'")
-            messages = await self.dog_agent.respond(AgentContext(
-                session_id=session.session_id,
-                user_input=user_input,
-                message_type=MessageType.ERROR,
-                metadata={"error_type": "input_too_short"}
-            ))
-            return ('stay_in_state', messages)
+        # Delegate validation to validation service
+        validation_result = await self.validation_service.validate_symptom_input(user_input)
+        if not validation_result.valid:
+            logger.info(f"Symptom validation failed: {validation_result.message}")
+            raise V2ValidationError(
+                message=validation_result.message,
+                field="user_input",
+                value=user_input,
+                details=validation_result.details
+            )
         
         try:
             # Use semantic search to find matching symptoms
@@ -224,15 +227,25 @@ class FlowHandlers:
         """Handle user's confirmation response with match tracking"""
         logger.info(f"Handling confirmation response: '{user_input}'")
         
-        # Normalize input for checking
-        normalized_input = user_input.lower().strip()
+        # Delegate validation to validation service
+        validation_result = await self.validation_service.validate_yes_no_response(user_input)
+        
+        if not validation_result.valid:
+            logger.info(f"Yes/no validation failed: {validation_result.message}")
+            raise V2ValidationError(
+                message=validation_result.message,
+                field="user_input", 
+                value=user_input,
+                details=validation_result.details
+            )
+        
+        # Get response type from validation
+        response_type = validation_result.details.get("response_type")
         
         # Get match distance from V2 SessionState field
         match_distance = session.match_distance if session.match_distance is not None else 'unknown'
         
-        # Log the confirmation result for match quality analysis
-        if "ja" in normalized_input or "yes" in normalized_input:
-            confirmed = True
+        if response_type == "yes":
             logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: yes, Distance: {match_distance}")
             
             # Transition to context gathering
@@ -245,8 +258,7 @@ class FlowHandlers:
             
             return (FlowStep.WAIT_FOR_CONTEXT, messages)
             
-        elif "nein" in normalized_input or "no" in normalized_input:
-            confirmed = False
+        elif response_type == "no":
             logger.info(f"Match confirmation - Symptom: '{session.active_symptom}', Confirmed: no, Distance: {match_distance}")
             
             # Transition to end or restart
@@ -261,19 +273,6 @@ class FlowHandlers:
             ))
             
             return (FlowStep.END_OR_RESTART, messages)
-            
-        else:
-            # Invalid response - ask for clarification
-            logger.info(f"Invalid confirmation response: '{user_input}'")
-            messages = await self.dog_agent.respond(AgentContext(
-                session_id=session.session_id,
-                user_input="",
-                message_type=MessageType.ERROR,
-                metadata={"error_type": "invalid_yes_no"}
-            ))
-            
-            # Stay in current state
-            return ('stay_in_state', messages)
         
     
     async def handle_context_input(
@@ -296,6 +295,17 @@ class FlowHandlers:
             List of diagnosis messages from dog agent
         """
         logger.info(f"Handling context input: '{user_input[:50]}...'")
+        
+        # Delegate validation to validation service
+        validation_result = await self.validation_service.validate_context_input(user_input)
+        if not validation_result.valid:
+            logger.info(f"Context validation failed: {validation_result.message}")
+            raise V2ValidationError(
+                message=validation_result.message,
+                field="user_input",
+                value=user_input,
+                details=validation_result.details
+            )
         
         try:
             # Combine symptom and context for analysis
