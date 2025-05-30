@@ -272,17 +272,8 @@ class FlowHandlers:
             session.messages.clear()
             session.agent_status.clear()
             
-            logger.info("Session data cleared, generating greeting messages...")
-            
-            try:
-                # Generate the same greeting as a new conversation would
-                messages = await self.handle_greeting(session, "", {})
-                logger.info(f"Generated {len(messages)} greeting messages for restart")
-                for msg in messages:
-                    logger.info(f"  - {msg.sender}: {msg.text[:50]}...")
-            except Exception as e:
-                logger.error(f"Error generating greeting messages: {e}")
-                raise
+            # Generate the same greeting as a new conversation would
+            messages = await self.handle_greeting(session, "", {})
             
             # Transition to WAIT_FOR_SYMPTOM with the greeting messages
             return (FlowStep.WAIT_FOR_SYMPTOM, messages)

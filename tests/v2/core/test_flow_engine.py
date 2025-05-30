@@ -165,10 +165,17 @@ class TestEventClassification:
             
             # Yes responses
             yes_inputs = ["ja", "Ja", "ja bitte", "ja, gerne"]
-            yes_states = [FlowStep.WAIT_FOR_CONFIRMATION, FlowStep.ASK_FOR_EXERCISE]
             
+            # For WAIT_FOR_CONFIRMATION, we now always return USER_INPUT
+            # The handler will determine if it's yes/no
             for yes_input in yes_inputs:
-                for state in yes_states:
+                event = engine.classify_user_input(yes_input, FlowStep.WAIT_FOR_CONFIRMATION)
+                assert event == FlowEvent.USER_INPUT
+            
+            # For ASK_FOR_EXERCISE and END_OR_RESTART, we still return YES_RESPONSE/NO_RESPONSE
+            yes_states_with_direct_classification = [FlowStep.ASK_FOR_EXERCISE, FlowStep.END_OR_RESTART]
+            for yes_input in yes_inputs:
+                for state in yes_states_with_direct_classification:
                     event = engine.classify_user_input(yes_input, state)
                     assert event == FlowEvent.YES_RESPONSE
             
@@ -176,7 +183,11 @@ class TestEventClassification:
             no_inputs = ["nein", "Nein", "nein danke"]
             
             for no_input in no_inputs:
-                for state in yes_states:
+                event = engine.classify_user_input(no_input, FlowStep.WAIT_FOR_CONFIRMATION)
+                assert event == FlowEvent.USER_INPUT
+                
+            for no_input in no_inputs:
+                for state in yes_states_with_direct_classification:
                     event = engine.classify_user_input(no_input, state)
                     assert event == FlowEvent.NO_RESPONSE
     
@@ -318,6 +329,10 @@ class TestCompleteFlows:
                 'symptom_found',
                 [V2AgentMessage(sender="dog", text="Als Hund belle ich...", message_type="response")]
             )
+            mock_handlers.handle_confirmation.return_value = (
+                FlowStep.WAIT_FOR_CONTEXT,
+                [V2AgentMessage(sender="dog", text="Gut, erzähle mir mehr...", message_type="question")]
+            )
             mock_handlers.handle_context_input.return_value = [
                 V2AgentMessage(sender="dog", text="Territorial instinkt...", message_type="response")
             ]
@@ -345,8 +360,8 @@ class TestCompleteFlows:
             )
             assert state == FlowStep.WAIT_FOR_CONFIRMATION
             
-            # Step 3: Confirmation yes
-            state, messages = await engine.process_event(session, FlowEvent.YES_RESPONSE)
+            # Step 3: Confirmation yes - use USER_INPUT for confirmation state
+            state, messages = await engine.process_event(session, FlowEvent.USER_INPUT, "ja")
             assert state == FlowStep.WAIT_FOR_CONTEXT
             
             # Step 4: Context input
@@ -670,6 +685,11 @@ class TestFlowEngineDemo:
                  V2AgentMessage(sender="dog", text="Magst du mehr über meine Gefühle erfahren?", message_type="question")]
             )
             
+            mock_handlers.handle_confirmation.return_value = (
+                FlowStep.WAIT_FOR_CONTEXT,
+                [V2AgentMessage(sender="dog", text="Super! Erzähl mir mehr über die Situation.", message_type="question")]
+            )
+            
             mock_handlers.handle_context_input.return_value = [
                 V2AgentMessage(sender="dog", text="Jetzt verstehe ich! Wenn Fremde kommen, aktiviert sich mein Schutzinstinkt besonders stark.", message_type="response"),
                 V2AgentMessage(sender="dog", text="Möchtest du eine Übung dazu?", message_type="question")
@@ -709,7 +729,7 @@ class TestFlowEngineDemo:
             # Step 3: Confirmation
             print(f"\n3. Bestätigung (Zustand: {session.current_step.value})")
             print("   👤 User: ja")
-            state, messages = await engine.process_event(session, FlowEvent.YES_RESPONSE, "ja")
+            state, messages = await engine.process_event(session, FlowEvent.USER_INPUT, "ja")
             for msg in messages:
                 print(f"   🤖 {msg.sender}: {msg.text}")
             print(f"   → Neuer Zustand: {state.value}")
