@@ -9,7 +9,7 @@ pytest-asyncio
 pytest-cov
 redis
 requests
-uvicorn
+uvicorn[standard]
 weaviate-client
 weaviate-client[agents]
 
