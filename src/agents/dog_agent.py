@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Any
 from src.agents.base_agent import BaseAgent, AgentContext, MessageType, V2AgentMessage
 from src.core.exceptions import V2AgentError, V2ValidationError
 from src.core.prompt_manager import PromptType, PromptCategory
+from src.prompts.generation_prompts import DOG_AGENT_SYSTEM
 
 
 class DogAgent(BaseAgent):
@@ -37,6 +38,7 @@ class DogAgent(BaseAgent):
         
         # Dog-specific message configuration
         self._default_temperature = 0.8  # More personality for dog responses
+        self._system_prompt = DOG_AGENT_SYSTEM
         
     def get_supported_message_types(self) -> List[MessageType]:
         """Return message types this agent supports."""
@@ -219,8 +221,12 @@ class DogAgent(BaseAgent):
             text = self.prompt_manager.get_prompt(PromptType.DOG_NO_MATCH_ERROR)
         elif error_type == 'no_behavior_match':
             text = self.prompt_manager.get_prompt(PromptType.NO_BEHAVIOR_MATCH)
+        elif error_type == 'not_dog_related':
+            text = self.prompt_manager.get_prompt(PromptType.DOG_SILLY_INPUT_REJECTION)
         elif error_type == 'input_too_short':
             text = self.prompt_manager.get_prompt(PromptType.INPUT_TOO_SHORT)
+        elif error_type == 'context_too_short':
+            text = "Ich brauche noch ein bisschen mehr Info… Wo war das genau, was war da los?"
         elif error_type == 'invalid_yes_no':
             text = self.prompt_manager.get_prompt(PromptType.INVALID_YES_NO)
         elif error_type == 'invalid_input':
@@ -317,11 +323,20 @@ class DogAgent(BaseAgent):
         print(f"DEBUG: primary_instinct={primary_instinct}, primary_description={primary_description}")
 
         try:
-            # Format diagnosis from dog perspective
+            # Get all instinct descriptions from analysis data
+            all_instincts = analysis_data.get('all_instincts', {})
+            symptom = context.metadata.get('symptom', 'unbekanntes Verhalten')
+            user_context = context.metadata.get('context', '')
+            
+            # Use the proper instinct diagnosis template with all RAG data
             diagnosis_text = await self.generate_text_with_prompt(
-                PromptType.DOG_DIAGNOSIS_INTRO,
-                primary_instinct=primary_instinct,
-                primary_description=primary_description,
+                PromptType.DOG_INSTINCT_DIAGNOSIS,
+                symptom=symptom,
+                context=user_context,
+                jagd=all_instincts.get('jagd', 'Keine Jagdinstinkt-Information gefunden'),
+                rudel=all_instincts.get('rudel', 'Keine Rudelinstinkt-Information gefunden'),
+                territorial=all_instincts.get('territorial', 'Keine Territorialinstinkt-Information gefunden'),
+                sexual=all_instincts.get('sexual', 'Keine Sexualinstinkt-Information gefunden'),
                 temperature=self._default_temperature
             )
 

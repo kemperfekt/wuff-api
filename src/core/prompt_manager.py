@@ -38,6 +38,7 @@ class PromptType(str, Enum):
     DOG_GREETING = "dog.greeting"
     DOG_GREETING_FOLLOWUP = "dog.greeting.followup"
     DOG_PERSPECTIVE = "generation.dog_perspective"
+    DOG_INSTINCT_DIAGNOSIS = "generation.instinct_diagnosis"
     DOG_ASK_FOR_MORE = "dog.ask.for.more"
     DOG_DIAGNOSIS_INTRO = "dog.diagnosis.intro"
     DOG_DIAGNOSIS = "dog.diagnosis"
@@ -47,6 +48,7 @@ class PromptType(str, Enum):
     #DOG_RESTART_QUESTION = "dog.restart.question"
     DOG_CONTINUE_OR_RESTART = "dog.continue.or.restart"
     DOG_NO_MATCH_ERROR = "dog.no.match.error"
+    DOG_SILLY_INPUT_REJECTION = "dog.silly.input.rejection"
     DOG_INVALID_INPUT_ERROR = "dog.invalid.input.error"
     DOG_TECHNICAL_ERROR = "dog.technical.error"
     DOG_DESCRIBE_MORE = "dog.need.more.detail"
@@ -239,7 +241,7 @@ class PromptManager:
             key="generation.instinct_diagnosis",
             template=generation_prompts.INSTINCT_DIAGNOSIS_TEMPLATE,
             category=PromptCategory.DOG,
-            variables=["symptom", "jagd", "rudel", "territorial", "sexual"]
+            variables=["symptom", "context", "jagd", "rudel", "territorial", "sexual"]
         ))
         
         self.add_prompt(Prompt(

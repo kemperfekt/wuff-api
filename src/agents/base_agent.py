@@ -246,6 +246,7 @@ class BaseAgent(ABC):
             # Generate text
             result = await self.gpt_service.complete(
                 prompt=prompt,
+                system_prompt=self._system_prompt if hasattr(self, '_system_prompt') else None,
                 model=model or self._default_model,
                 max_tokens=max_tokens or self._max_tokens,
                 temperature=temperature or self._temperature

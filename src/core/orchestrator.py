@@ -334,7 +334,7 @@ class V2Orchestrator:
         if validation_error_type == "input_too_short":
             agent_error_type = "input_too_short"
         elif validation_error_type == "context_too_short":
-            agent_error_type = "input_too_short"  # Use same error type for context
+            agent_error_type = "context_too_short"  # Keep specific context error
         elif validation_error_type == "invalid_yes_no":
             agent_error_type = "invalid_yes_no"
         elif "too short" in str(error.message).lower():
