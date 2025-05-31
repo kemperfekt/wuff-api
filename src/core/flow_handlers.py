@@ -59,7 +59,7 @@ class FlowHandlers:
         self.gpt_service = gpt_service or GPTService()
         self.weaviate_service = weaviate_service or WeaviateService()
         self.redis_service = redis_service or RedisService()
-        self.validation_service = validation_service or ValidationService()
+        self.validation_service = validation_service or ValidationService(gpt_service=self.gpt_service)
         
         # Initialize agents with services
         self.dog_agent = dog_agent or DogAgent(
@@ -328,7 +328,9 @@ class FlowHandlers:
                 message_type=MessageType.RESPONSE,
                 metadata={
                     'response_mode': 'diagnosis',
-                    'analysis_data': analysis_data
+                    'analysis_data': analysis_data,
+                    'symptom': symptom,
+                    'context': user_input
                 }
             )
             
@@ -608,15 +610,18 @@ class FlowHandlers:
                 # Format instinct data for analysis
                 instinct_descriptions = {}
                 for result in instinct_results:
-                    text = result.get('properties', {}).get('text', '')
-                    if 'jagd' in text.lower():
-                        instinct_descriptions['jagd'] = text
-                    elif 'rudel' in text.lower():
-                        instinct_descriptions['rudel'] = text
-                    elif 'territorial' in text.lower():
-                        instinct_descriptions['territorial'] = text
-                    elif 'sexual' in text.lower():
-                        instinct_descriptions['sexual'] = text
+                    properties = result.get('properties', {})
+                    instinct_name = properties.get('instinkt', '').lower()
+                    hundesperspektive = properties.get('hundesperspektive', '')
+                    
+                    if 'jagd' in instinct_name:
+                        instinct_descriptions['jagd'] = hundesperspektive
+                    elif 'rudel' in instinct_name:
+                        instinct_descriptions['rudel'] = hundesperspektive
+                    elif 'territorial' in instinct_name:
+                        instinct_descriptions['territorial'] = hundesperspektive
+                    elif 'sexual' in instinct_name:
+                        instinct_descriptions['sexual'] = hundesperspektive
                 
                 # GPT analysis
                 analysis_prompt = self.prompt_manager.get_prompt(
