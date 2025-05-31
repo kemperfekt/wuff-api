@@ -157,14 +157,14 @@ src/
 - [ ] **COMMIT**: "feat: V2 switch-over execution"
 
 ### Phase 8: Post-Switch Validation
-- [ ] Full system testing in production
+- [x] Full system testing in production
 - [ ] Performance validation
 - [ ] Fix any production issues
 - [ ] **COMMIT**: "feat: V2 switch-over validation"
 
 ### Phase 9: Cleanup (Optional)
-- [ ] Remove v1 code (after confidence period)
-- [ ] Clean up unused dependencies
+- [x] Remove v1 code (after confidence period)
+- [x] Clean up unused dependencies
 - [ ] **COMMIT**: "refactor: Complete migration to v2"
 
 ## Current Status
@@ -337,7 +337,7 @@ RUN_INTEGRATION_TESTS=false
 [✅] V2 model imports - Fixed to use V2 models
 [✅] Specific error messages - Implemented and tested
 [✅] Import errors - Fixed OpenAI and Redis imports
-[✅] Prompt refactoring - Complete and working
+[ ] Prompt refactoring - Complete and working
 
 ## Immediate Next Steps (Recommended Priority)
 
