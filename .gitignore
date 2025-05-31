@@ -27,7 +27,7 @@ assets/
 .DS_Store
 tech_strategy.md
 modules.png
-CLAUDE
+.CLAUDE_CONTENT/
 CLAUDE.md
 deployment-log.txt
 Archive
