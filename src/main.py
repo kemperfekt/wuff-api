@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 from contextlib import asynccontextmanager
 import logging
+from datetime import datetime
 
 # V2 imports - the key difference from V1
 from src.core.orchestrator import V2Orchestrator, init_orchestrator
@@ -49,6 +50,12 @@ async def lifespan(app: FastAPI):
         logger.info("✅ V2 API Ready!")
         logger.info("=" * 60)
         
+        # Log startup completion
+        import os
+        port = os.getenv("PORT", "8000")
+        logger.info(f"🌐 Server listening on port {port}")
+        logger.info("💚 Health check available at GET /")
+        
     except Exception as e:
         logger.error(f"❌ Failed to initialize V2 orchestrator: {e}")
         logger.error("🔥 Startup failed - check environment variables and dependencies")
@@ -66,7 +73,9 @@ app = FastAPI(
     title="WuffChat V2 API",
     description="V2 implementation with FSM-based flow engine",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=None,  # Disable docs to reduce overhead
+    redoc_url=None  # Disable redoc to reduce overhead
 )
 
 # Setup logging
@@ -104,13 +113,21 @@ class MessageRequest(BaseModel):
     message: str
 
 
-@app.get("/")
+@app.get("/", status_code=200)
 def read_root():
     """Health check endpoint - responds immediately for Scalingo"""
-    # Don't log on every health check to avoid log spam
-    global orchestrator
-    status = "ok" if orchestrator is not None else "initializing"
-    return {"status": status, "version": "2.0.0", "service": "wuffchat-v2"}
+    # Synchronous response for maximum compatibility
+    return {"status": "ok", "version": "2.0.0", "service": "wuffchat-v2"}
+
+@app.get("/health", status_code=200)
+def health():
+    """Alternative health check endpoint"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.head("/", status_code=200)
+def head_root():
+    """HEAD request support for health checks"""
+    return None
 
 
 @app.post("/flow_intro", response_model=IntroResponse)
@@ -317,6 +334,17 @@ async def get_prompt_debug_info():
 # Main entry point
 if __name__ == "__main__":
     import uvicorn
+    import signal
+    import sys
+    
+    def signal_handler(signum, frame):
+        logger.info(f"⚠️ Received signal {signum}")
+        logger.info("🛑 Shutting down gracefully...")
+        sys.exit(0)
+    
+    # Register signal handlers
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
     
     # Use different port than V1 for parallel testing
     port = 8001  # V1 uses 8000, V2 uses 8001
