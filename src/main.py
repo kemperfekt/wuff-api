@@ -29,18 +29,30 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 WuffChat V2 API Starting...")
     logger.info("=" * 60)
     
+    # Validate environment variables (warn but don't fail)
+    from src.core.config import validate_required_settings
+    env_valid = validate_required_settings()
+    if not env_valid:
+        logger.warning("⚠️ Some environment variables are missing - services may fail on first use")
+    
     # Initialize orchestrator with lazy loading to avoid blocking health checks
-    orchestrator = init_orchestrator(session_store)
-    
-    # Log configuration
-    logger.info("📋 Configuration:")
-    logger.info(f"  - Session Store: {len(session_store.sessions)} active sessions")
-    logger.info(f"  - V2 Orchestrator: Initialized (services lazy-loaded)")
-    logger.info("  - Services: Will initialize on first use")
-    
-    logger.info("=" * 60)
-    logger.info("✅ V2 API Ready!")
-    logger.info("=" * 60)
+    try:
+        orchestrator = init_orchestrator(session_store)
+        
+        # Log configuration
+        logger.info("📋 Configuration:")
+        logger.info(f"  - Session Store: {len(session_store.sessions)} active sessions")
+        logger.info(f"  - V2 Orchestrator: Initialized (services lazy-loaded)")
+        logger.info("  - Services: Will initialize on first use")
+        
+        logger.info("=" * 60)
+        logger.info("✅ V2 API Ready!")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize V2 orchestrator: {e}")
+        logger.error("🔥 Startup failed - check environment variables and dependencies")
+        raise  # Re-raise to fail startup
     
     yield
     
@@ -96,7 +108,9 @@ class MessageRequest(BaseModel):
 def read_root():
     """Health check endpoint - responds immediately for Scalingo"""
     # Don't log on every health check to avoid log spam
-    return {"status": "ok", "version": "2.0.0", "service": "wuffchat-v2"}
+    global orchestrator
+    status = "ok" if orchestrator is not None else "initializing"
+    return {"status": status, "version": "2.0.0", "service": "wuffchat-v2"}
 
 
 @app.post("/flow_intro", response_model=IntroResponse)
@@ -115,6 +129,10 @@ async def flow_intro():
         logger.info(f"[V2] Neue Session erstellt: ID={session.session_id}, Step={session.current_step}")
         
         # Start conversation using V2 orchestrator
+        if orchestrator is None:
+            logger.error("[V2] Orchestrator not initialized!")
+            raise HTTPException(status_code=503, detail="Service not ready - orchestrator not initialized")
+        
         messages = await orchestrator.start_conversation(session.session_id)
         
         # Debug output
@@ -156,6 +174,10 @@ async def flow_step(req: MessageRequest):
         logger.debug(f"[V2] Benutzer-Nachricht: {req.message}")
         
         # Process message using V2 orchestrator
+        if orchestrator is None:
+            logger.error("[V2] Orchestrator not initialized!")
+            raise HTTPException(status_code=503, detail="Service not ready - orchestrator not initialized")
+        
         messages = await orchestrator.handle_message(req.session_id, req.message)
         
         # Get updated session state
