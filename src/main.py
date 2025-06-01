@@ -74,10 +74,11 @@ async def lifespan(app: FastAPI):
         async def heartbeat():
             """Log heartbeat to show app is running"""
             count = 0
+            instance_id = os.getenv("HOSTNAME", "unknown")[:8]
             while True:
                 await asyncio.sleep(5)
                 count += 1
-                logger.info(f"💓 Heartbeat {count} - App is running...")
+                logger.info(f"💓 Heartbeat {count} - Instance {instance_id} running on port {port}")
         
         # Start heartbeat task
         asyncio.create_task(heartbeat())
@@ -95,7 +96,17 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("🛑 WuffChat V2 API Shutting down...")
-    # Add any cleanup code here if needed
+    
+    # Cleanup
+    instance_id = os.getenv("HOSTNAME", "unknown")[:8]
+    logger.info(f"🧹 Cleaning up instance {instance_id}")
+    
+    # Force exit to prevent zombie processes
+    import signal
+    import sys
+    logger.info("💀 Forcing process termination")
+    os.kill(os.getpid(), signal.SIGTERM)
+    
     logger.info("👋 Goodbye!")
 
 # Initialize FastAPI app with lifespan
@@ -196,6 +207,20 @@ def ping():
     """Ultra-simple ping endpoint"""
     logger.info("🏓 Ping endpoint accessed!")
     return "pong"
+
+# Startup probe endpoint
+@app.get("/ready", status_code=200)
+def ready():
+    """Readiness probe endpoint"""
+    logger.info("✅ Readiness probe accessed!")
+    return {"ready": True}
+
+# Liveness probe endpoint  
+@app.get("/alive", status_code=200)
+def alive():
+    """Liveness probe endpoint"""
+    logger.info("💚 Liveness probe accessed!")
+    return {"alive": True}
 
 
 @app.post("/flow_intro", response_model=IntroResponse)
