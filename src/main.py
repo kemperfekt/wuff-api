@@ -58,9 +58,29 @@ async def lifespan(app: FastAPI):
         logger.info("💚 Health check available at GET /")
         logger.info("🔍 Monitoring for Scalingo health checks...")
         
+        # Log Scalingo-specific environment
+        if os.getenv("SCALINGO_APP"):
+            logger.info(f"📦 Running on Scalingo: {os.getenv('SCALINGO_APP')}")
+            logger.info(f"🔧 Container: {os.getenv('CONTAINER', 'unknown')}")
+            logger.info(f"🏷️ Region: {os.getenv('SCALINGO_REGION', 'unknown')}")
+        
         # Force immediate log flush
         for handler in logger.handlers:
             handler.flush()
+        
+        # Create a simple background task to log periodically
+        import asyncio
+        
+        async def heartbeat():
+            """Log heartbeat to show app is running"""
+            count = 0
+            while True:
+                await asyncio.sleep(5)
+                count += 1
+                logger.info(f"💓 Heartbeat {count} - App is running...")
+        
+        # Start heartbeat task
+        asyncio.create_task(heartbeat())
         
     except Exception as e:
         logger.error(f"❌ Failed to initialize V2 orchestrator: {e}")
@@ -137,6 +157,7 @@ class MessageRequest(BaseModel):
 @app.get("/", status_code=200)
 def read_root():
     """Health check endpoint - responds immediately for Scalingo"""
+    logger.info("🎯 Root endpoint (/) accessed!")
     # Synchronous response for maximum compatibility
     return {"status": "ok", "version": "2.0.0", "service": "wuffchat-v2"}
 
