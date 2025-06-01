@@ -82,6 +82,10 @@ async def lifespan(app: FastAPI):
         # Start heartbeat task
         asyncio.create_task(heartbeat())
         
+        # Log that we're ready for connections
+        logger.info("🟢 Server is ready to accept connections")
+        logger.info("🔗 Listening on all interfaces (0.0.0.0)")
+        
     except Exception as e:
         logger.error(f"❌ Failed to initialize V2 orchestrator: {e}")
         logger.error("🔥 Startup failed - check environment variables and dependencies")
@@ -111,13 +115,16 @@ logger = setup_logging()
 @app.middleware("http")
 async def log_requests(request, call_next):
     """Log all incoming requests for debugging"""
-    # Only log non-health-check requests to avoid spam
-    if request.url.path not in ["/", "/health", "/_health"]:
-        logger.info(f"📥 Request: {request.method} {request.url.path}")
-    # For health checks, log only the first few
-    elif not hasattr(app.state, "health_logged"):
-        logger.info(f"🏥 Health check: {request.method} {request.url.path}")
-        app.state.health_logged = True
+    path = request.url.path
+    method = request.method
+    
+    # Always log the first request of any type
+    if not hasattr(app.state, "first_request_logged"):
+        logger.info(f"🎉 FIRST REQUEST: {method} {path}")
+        app.state.first_request_logged = True
+    
+    # Log all requests for debugging
+    logger.info(f"📥 Request: {method} {path} from {request.client.host if request.client else 'unknown'}")
     
     response = await call_next(request)
     return response
@@ -182,6 +189,13 @@ def scalingo_health():
 def healthz():
     """Plain text health check for maximum compatibility"""
     return "OK"
+
+# Ultra-simple ping endpoint
+@app.get("/ping", status_code=200)
+def ping():
+    """Ultra-simple ping endpoint"""
+    logger.info("🏓 Ping endpoint accessed!")
+    return "pong"
 
 
 @app.post("/flow_intro", response_model=IntroResponse)
