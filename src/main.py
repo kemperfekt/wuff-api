@@ -8,6 +8,7 @@ Frontend compatibility is maintained through the same endpoints and response for
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from contextlib import asynccontextmanager
@@ -55,6 +56,11 @@ async def lifespan(app: FastAPI):
         port = os.getenv("PORT", "8000")
         logger.info(f"🌐 Server listening on port {port}")
         logger.info("💚 Health check available at GET /")
+        logger.info("🔍 Monitoring for Scalingo health checks...")
+        
+        # Force immediate log flush
+        for handler in logger.handlers:
+            handler.flush()
         
     except Exception as e:
         logger.error(f"❌ Failed to initialize V2 orchestrator: {e}")
@@ -80,6 +86,21 @@ app = FastAPI(
 
 # Setup logging
 logger = setup_logging()
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """Log all incoming requests for debugging"""
+    # Only log non-health-check requests to avoid spam
+    if request.url.path not in ["/", "/health", "/_health"]:
+        logger.info(f"📥 Request: {request.method} {request.url.path}")
+    # For health checks, log only the first few
+    elif not hasattr(app.state, "health_logged"):
+        logger.info(f"🏥 Health check: {request.method} {request.url.path}")
+        app.state.health_logged = True
+    
+    response = await call_next(request)
+    return response
 
 # CORS configuration - same as V1 for compatibility
 app.add_middleware(
@@ -128,6 +149,18 @@ def health():
 def head_root():
     """HEAD request support for health checks"""
     return None
+
+# Scalingo specific health check
+@app.get("/_health", status_code=200)
+def scalingo_health():
+    """Scalingo-specific health check endpoint"""
+    return {"status": "UP"}
+
+# Plain text health check
+@app.get("/healthz", response_class=PlainTextResponse, status_code=200)
+def healthz():
+    """Plain text health check for maximum compatibility"""
+    return "OK"
 
 
 @app.post("/flow_intro", response_model=IntroResponse)
