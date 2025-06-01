@@ -96,17 +96,6 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("🛑 WuffChat V2 API Shutting down...")
-    
-    # Cleanup
-    instance_id = os.getenv("HOSTNAME", "unknown")[:8]
-    logger.info(f"🧹 Cleaning up instance {instance_id}")
-    
-    # Force exit to prevent zombie processes
-    import signal
-    import sys
-    logger.info("💀 Forcing process termination")
-    os.kill(os.getpid(), signal.SIGTERM)
-    
     logger.info("👋 Goodbye!")
 
 # Initialize FastAPI app with lifespan
@@ -127,15 +116,15 @@ logger = setup_logging()
 async def log_requests(request, call_next):
     """Log all incoming requests for debugging"""
     path = request.url.path
-    method = request.method
     
-    # Always log the first request of any type
-    if not hasattr(app.state, "first_request_logged"):
-        logger.info(f"🎉 FIRST REQUEST: {method} {path}")
-        app.state.first_request_logged = True
-    
-    # Log all requests for debugging
-    logger.info(f"📥 Request: {method} {path} from {request.client.host if request.client else 'unknown'}")
+    # Log health checks once
+    if path == "/health":
+        if not hasattr(app.state, "health_logged"):
+            logger.info(f"✅ Health check endpoint hit: {path}")
+            app.state.health_logged = True
+    else:
+        # Log non-health requests
+        logger.info(f"📥 Request: {request.method} {path}")
     
     response = await call_next(request)
     return response
@@ -431,13 +420,14 @@ if __name__ == "__main__":
     import sys
     
     def signal_handler(signum, frame):
-        logger.info(f"⚠️ Received signal {signum}")
-        logger.info("🛑 Shutting down gracefully...")
+        logger.info(f"⚠️ Received signal {signum} - {signal.Signals(signum).name}")
+        logger.info("🛑 Main process shutting down gracefully...")
         sys.exit(0)
     
     # Register signal handlers
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGHUP, signal_handler)
     
     # Use different port than V1 for parallel testing
     port = 8001  # V1 uses 8000, V2 uses 8001
