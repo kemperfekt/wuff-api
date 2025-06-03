@@ -132,15 +132,35 @@ def get_api_key():
     if not api_key:
         # Generate a secure key for development
         api_key = secrets.token_urlsafe(32)
-        logger.warning(f"⚠️ No WUFFCHAT_API_KEY set. Generated temporary key: {api_key}")
+        logger.warning("⚠️ No WUFFCHAT_API_KEY set. Generated temporary key.")
         logger.warning("⚠️ Set WUFFCHAT_API_KEY environment variable for production!")
-        logger.warning("⚠️ Add this key to your frontend .env file as well!")
+        logger.warning(f"⚠️ Temporary key (first 8 chars): {api_key[:8]}...")
     else:
         logger.info("✅ API Key configured from environment")
     return api_key
 
 # Initialize API key
 VALID_API_KEY = get_api_key()
+
+# Generic error message for production
+def get_safe_error_message(error: Exception, context: str = "") -> str:
+    """Return a safe error message that doesn't expose internal details"""
+    # Log the full error internally
+    logger.error(f"Error in {context}: {type(error).__name__}: {str(error)}")
+    
+    # Return generic message to user
+    if isinstance(error, HTTPException):
+        return error.detail
+    
+    # Map specific errors to user-friendly messages
+    error_messages = {
+        "ConnectionError": "Verbindungsfehler. Bitte versuche es später erneut.",
+        "TimeoutError": "Die Anfrage hat zu lange gedauert. Bitte versuche es erneut.",
+        "ValidationError": "Die Eingabe war ungültig. Bitte überprüfe deine Nachricht.",
+    }
+    
+    error_type = type(error).__name__
+    return error_messages.get(error_type, "Ein Fehler ist aufgetreten. Bitte versuche es später erneut.")
 
 # List of endpoints that don't require authentication
 PUBLIC_ENDPOINTS = {
@@ -158,7 +178,7 @@ async def verify_api_key(api_key: Optional[str] = Depends(api_key_header)):
             headers={"WWW-Authenticate": "ApiKey"},
         )
     if api_key != VALID_API_KEY:
-        logger.warning(f"❌ Invalid API key attempt: {api_key[:8]}...")
+        logger.warning("❌ Invalid API key attempt detected")
         raise HTTPException(
             status_code=401,
             detail="Invalid API Key",
@@ -224,6 +244,25 @@ async def add_rate_limit_headers(request: Request, call_next):
         response.headers["X-RateLimit-Remaining"] = str(request.state.remaining)
     if hasattr(request.state, "reset_time"):
         response.headers["X-RateLimit-Reset"] = str(request.state.reset_time)
+    
+    return response
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
+    
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    
+    # Remove server header if present
+    response.headers.pop("Server", None)
     
     return response
 
@@ -355,7 +394,7 @@ async def flow_intro(request: Request):
         logger.error(f"[V2] Error in flow_intro: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Fehler beim Starten der Konversation: {str(e)}"
+            detail=get_safe_error_message(e, "flow_intro")
         )
 
 
@@ -414,7 +453,7 @@ async def flow_step(request: Request, req: MessageRequest):
         logger.error(f"[V2] Error in flow_step: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Fehler bei der Nachrichtenverarbeitung: {str(e)}"
+            detail=get_safe_error_message(e, "flow_step")
         )
 
 
@@ -451,7 +490,7 @@ async def get_session_info(session_id: str):
         logger.error(f"[V2] Error getting session info: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Fehler beim Abrufen der Session-Informationen: {str(e)}"
+            detail=get_safe_error_message(e, "session_info")
         )
 
 
@@ -469,7 +508,7 @@ async def get_flow_debug_info():
         logger.error(f"[V2] Error getting flow debug info: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Fehler beim Abrufen der Flow-Debug-Informationen: {str(e)}"
+            detail=get_safe_error_message(e, "debug_flow")
         )
     
 @app.get("/v2/debug/prompts")
@@ -511,7 +550,7 @@ async def get_prompt_debug_info():
         logger.error(f"[V2] Error getting prompt debug info: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Fehler beim Abrufen der Prompt-Debug-Informationen: {str(e)}"
+            detail=get_safe_error_message(e, "debug_prompts")
         )
 
 
