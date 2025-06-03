@@ -17,7 +17,7 @@ Verhalten: '{symptom}'
 Bereitgestellte Information: {match}
 
   DEINE AUFGABE: 
-  - Formuliere {match} in Ich-Form um
+  - Formuliere {match} aus der Hundeperspektive, so als ob Du es erlebt hast und darüber berichtest.
   - Bleibe EXAKT bei den Inhalten aus {match}
   - KEIN "Woof", keine Ausrufe, keine Fragen an den Menschen
   - Einfache, ruhige Sprache
