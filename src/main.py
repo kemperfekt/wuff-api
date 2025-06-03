@@ -6,20 +6,27 @@ This provides the exact same API as V1 but uses the V2 flow engine internally.
 Frontend compatibility is maintained through the same endpoints and response formats.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
+from fastapi.security import APIKeyHeader
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
+import os
+import secrets
 
 # V2 imports - the key difference from V1
 from src.core.orchestrator import V2Orchestrator, init_orchestrator
 from src.models.session_state import SessionStore
 from src.models.flow_models import FlowStep
 from src.core.logging_config import setup_logging
+from src.core.rate_limit_config import get_real_ip, RATE_LIMIT_TIERS
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -111,6 +118,81 @@ app = FastAPI(
 # Setup logging
 logger = setup_logging()
 
+# =============================================================================
+# API KEY AUTHENTICATION
+# =============================================================================
+
+# API Key Configuration
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+def get_api_key():
+    """Get API key from environment or generate one for development"""
+    api_key = os.getenv("WUFFCHAT_API_KEY")
+    if not api_key:
+        # Generate a secure key for development
+        api_key = secrets.token_urlsafe(32)
+        logger.warning(f"⚠️ No WUFFCHAT_API_KEY set. Generated temporary key: {api_key}")
+        logger.warning("⚠️ Set WUFFCHAT_API_KEY environment variable for production!")
+        logger.warning("⚠️ Add this key to your frontend .env file as well!")
+    else:
+        logger.info("✅ API Key configured from environment")
+    return api_key
+
+# Initialize API key
+VALID_API_KEY = get_api_key()
+
+# List of endpoints that don't require authentication
+PUBLIC_ENDPOINTS = {
+    "/", "/health", "/healthz", "/_health", "/ping", "/ready", "/alive",
+    "/docs", "/redoc", "/openapi.json"
+}
+
+async def verify_api_key(api_key: Optional[str] = Depends(api_key_header)):
+    """Verify API key for protected endpoints"""
+    if api_key is None:
+        logger.warning("❌ Request without API key")
+        raise HTTPException(
+            status_code=401,
+            detail="Missing API Key. Include 'X-API-Key' header.",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    if api_key != VALID_API_KEY:
+        logger.warning(f"❌ Invalid API key attempt: {api_key[:8]}...")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API Key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    return api_key
+
+# =============================================================================
+# RATE LIMITING
+# =============================================================================
+
+# Create limiter instance with custom IP extraction
+limiter = Limiter(key_func=get_real_ip)
+
+# Add rate limit exceeded handler with custom message
+def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Custom rate limit response with helpful message"""
+    response = PlainTextResponse(
+        content="Zu viele Anfragen. Bitte warte einen Moment und versuche es erneut.",
+        status_code=429,
+    )
+    response.headers["Retry-After"] = "60"
+    response.headers["X-RateLimit-Limit"] = str(getattr(exc, "limit", "N/A"))
+    response.headers["X-RateLimit-Reset"] = str(getattr(exc, "reset", "N/A"))
+    return response
+
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
+
+# CRITICAL: Add limiter to app state (required by slowapi)
+app.state.limiter = limiter
+
+# Use rate limit configurations from config
+RATE_LIMITS = RATE_LIMIT_TIERS["default"]
+
 # Request logging middleware
 @app.middleware("http")
 async def log_requests(request, call_next):
@@ -127,6 +209,22 @@ async def log_requests(request, call_next):
         logger.info(f"📥 Request: {request.method} {path}")
     
     response = await call_next(request)
+    return response
+
+# Rate limit info middleware
+@app.middleware("http")
+async def add_rate_limit_headers(request: Request, call_next):
+    """Add rate limit information to response headers"""
+    response = await call_next(request)
+    
+    # Add rate limit headers if they exist
+    if hasattr(request.state, "view_rate_limit"):
+        response.headers["X-RateLimit-Limit"] = request.state.view_rate_limit
+    if hasattr(request.state, "remaining"):
+        response.headers["X-RateLimit-Remaining"] = str(request.state.remaining)
+    if hasattr(request.state, "reset_time"):
+        response.headers["X-RateLimit-Reset"] = str(request.state.reset_time)
+    
     return response
 
 # CORS configuration - same as V1 for compatibility
@@ -212,8 +310,9 @@ def alive():
     return {"alive": True}
 
 
-@app.post("/flow_intro", response_model=IntroResponse)
-async def flow_intro():
+@app.post("/flow_intro", response_model=IntroResponse, dependencies=[Depends(verify_api_key)])
+@limiter.limit(RATE_LIMITS["flow_intro"])
+async def flow_intro(request: Request):
     """
     Start a new conversation - V2 implementation.
     
@@ -253,8 +352,9 @@ async def flow_intro():
         )
 
 
-@app.post("/flow_step")
-async def flow_step(req: MessageRequest):
+@app.post("/flow_step", dependencies=[Depends(verify_api_key)])
+@limiter.limit(RATE_LIMITS["flow_step"])
+async def flow_step(request: Request, req: MessageRequest):
     """
     Process a conversation step - V2 implementation.
     
