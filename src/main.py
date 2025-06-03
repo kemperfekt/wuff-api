@@ -239,8 +239,9 @@ app.add_middleware(
         "http://127.0.0.1:3000"
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Global session store - shared with V1
@@ -310,6 +311,12 @@ def alive():
     return {"alive": True}
 
 
+@app.options("/flow_intro")
+async def flow_intro_options():
+    """Handle preflight requests for flow_intro"""
+    return {"status": "ok"}
+
+
 @app.post("/flow_intro", response_model=IntroResponse, dependencies=[Depends(verify_api_key)])
 @limiter.limit(RATE_LIMITS["flow_intro"])
 async def flow_intro(request: Request):
@@ -350,6 +357,12 @@ async def flow_intro(request: Request):
             status_code=500,
             detail=f"Fehler beim Starten der Konversation: {str(e)}"
         )
+
+
+@app.options("/flow_step")
+async def flow_step_options():
+    """Handle preflight requests for flow_step"""
+    return {"status": "ok"}
 
 
 @app.post("/flow_step", dependencies=[Depends(verify_api_key)])
