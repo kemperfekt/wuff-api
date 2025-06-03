@@ -27,11 +27,12 @@ from src.models.session_state import SessionStore
 from src.models.flow_models import FlowStep
 from src.core.logging_config import setup_logging
 from src.core.rate_limit_config import get_real_ip, RATE_LIMIT_TIERS
+from src.core.security import init_secure_session_store, get_secure_session_store
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan event handler for startup/shutdown"""
-    global orchestrator
+    global orchestrator, secure_store
     
     # Startup
     logger.info("=" * 60)
@@ -46,6 +47,9 @@ async def lifespan(app: FastAPI):
     
     # Initialize orchestrator with lazy loading to avoid blocking health checks
     try:
+        # Initialize secure session store
+        secure_store = init_secure_session_store()
+        
         orchestrator = init_orchestrator(session_store)
         
         # Log configuration
@@ -262,7 +266,8 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     
     # Remove server header if present
-    response.headers.pop("Server", None)
+    if "Server" in response.headers:
+        del response.headers["Server"]
     
     return response
 
@@ -283,19 +288,22 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Global session store - shared with V1
-session_store = SessionStore()
+# Global session store - now using secure version
+session_store = SessionStore()  # Keep for backward compatibility
+secure_store = None  # Initialized in lifespan
 
 # Initialize V2 orchestrator
 orchestrator = None
 
-# API Models - same as V1 for compatibility
+# API Models - updated for security
 class IntroResponse(BaseModel):
     session_id: str
+    session_token: str  # NEW: Required for session security
     messages: List[Dict[str, Any]]  # Changed to Dict to match V2 format
 
 class MessageRequest(BaseModel):
     session_id: str
+    session_token: str  # NEW: Required for session security
     message: str
 
 
@@ -366,11 +374,15 @@ async def flow_intro(request: Request):
     Response format is identical to V1 for frontend compatibility.
     """
     try:
-        # Create new session
-        session = session_store.create_session()
-        session.current_step = FlowStep.GREETING
+        # Create new secure session
+        session, token = secure_store.create_session()
         
-        logger.info(f"[V2] Neue Session erstellt: ID={session.session_id}, Step={session.current_step}")
+        # Also create in legacy store for orchestrator compatibility
+        legacy_session = session_store.create_session()
+        legacy_session.session_id = session.session_id  # Use same ID
+        legacy_session.current_step = FlowStep.GREETING
+        
+        logger.info(f"[V2] Secure session created: ID={session.session_id[:8]}..., Step={session.current_step}")
         
         # Start conversation using V2 orchestrator
         if orchestrator is None:
@@ -384,9 +396,10 @@ async def flow_intro(request: Request):
         for msg in messages:
             logger.debug(f"  - {msg['sender']}: {msg['text'][:50]}...")
         
-        # Return V1-compatible response
+        # Return response with token
         return {
             "session_id": session.session_id,
+            "session_token": token,  # NEW: Include token for authentication
             "messages": messages  # Already in correct format from V2
         }
         
@@ -414,14 +427,23 @@ async def flow_step(request: Request, req: MessageRequest):
     Response format is identical to V1 for frontend compatibility.
     """
     try:
-        # Verify session exists
-        session = session_store.get_or_create(req.session_id)
+        # Validate session with token
+        session = secure_store.validate_and_get_session(req.session_id, req.session_token)
         if not session:
-            logger.warning(f"[V2] Session nicht gefunden: {req.session_id}")
+            logger.warning(f"[V2] Invalid session or token: {req.session_id[:8]}...")
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid session or token. Please start a new conversation."
+            )
+        
+        # Get legacy session for orchestrator
+        legacy_session = session_store.get_or_create(req.session_id)
+        if not legacy_session:
+            logger.warning(f"[V2] Legacy session not found: {req.session_id}")
             raise HTTPException(status_code=404, detail="Session not found")
         
         # Debug output before processing
-        logger.info(f"[V2] Verarbeite Nachricht - Session ID: {session.session_id}, Step: {session.current_step}")
+        logger.info(f"[V2] Verarbeite Nachricht - Session ID: {legacy_session.session_id}, Step: {legacy_session.current_step}")
         logger.debug(f"[V2] Benutzer-Nachricht: {req.message}")
         
         # Process message using V2 orchestrator
@@ -432,17 +454,17 @@ async def flow_step(request: Request, req: MessageRequest):
         messages = await orchestrator.handle_message(req.session_id, req.message)
         
         # Get updated session state
-        session = session_store.get_or_create(req.session_id)
+        legacy_session = session_store.get_or_create(req.session_id)
         
         # Debug output after processing
-        logger.info(f"[V2] Nachricht verarbeitet - Session ID: {session.session_id}, neuer Step: {session.current_step}")
+        logger.info(f"[V2] Nachricht verarbeitet - Session ID: {legacy_session.session_id}, neuer Step: {legacy_session.current_step}")
         logger.debug(f"[V2] Antwort-Nachrichten: {len(messages)} messages")
         for msg in messages:
             logger.debug(f"  - {msg['sender']}: {msg['text'][:50]}...")
         
-        # Return V1-compatible response
+        # Return response (no need for token in response)
         return {
-            "session_id": session.session_id,
+            "session_id": legacy_session.session_id,
             "messages": messages  # Already in correct format from V2
         }
         
