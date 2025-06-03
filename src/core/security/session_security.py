@@ -32,13 +32,13 @@ class SessionToken(BaseModel):
     SessionToken handles authentication.
     """
     token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    expires_at: datetime = Field(default_factory=lambda: datetime.utcnow() + timedelta(minutes=30))
-    last_activity: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(minutes=30))
+    last_activity: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     def is_expired(self) -> bool:
         """Check if token has expired"""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
     
     def validate(self, provided_token: str) -> bool:
         """Securely compare tokens"""
@@ -46,7 +46,7 @@ class SessionToken(BaseModel):
     
     def refresh(self) -> None:
         """Extend expiration on activity"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         self.last_activity = now
         self.expires_at = now + timedelta(minutes=30)
 
@@ -69,7 +69,7 @@ class SecureSessionStore:
         
         # Cleanup configuration
         self._cleanup_interval = timedelta(minutes=5)
-        self._last_cleanup = datetime.utcnow()
+        self._last_cleanup = datetime.now(timezone.utc)
         
         # Metrics for monitoring
         self._creation_count = 0
@@ -163,7 +163,7 @@ class SecureSessionStore:
         Design: Automatic cleanup prevents memory leaks without
         requiring external cron jobs.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Rate limit cleanup operations
         if now - self._last_cleanup < self._cleanup_interval:

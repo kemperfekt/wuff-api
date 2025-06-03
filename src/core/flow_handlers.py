@@ -172,7 +172,6 @@ class FlowHandlers:
                 
         except Exception as e:
             logger.error(f"Error in symptom search: {e}", exc_info=True)
-            print(f"DEBUG: Weaviate error caught, will show technical error")
             
             # Return technical error
             messages = await self.dog_agent.respond(AgentContext(
@@ -211,7 +210,6 @@ class FlowHandlers:
         else:
             # No match found - ask to try again
             logger.info("Symptom not found, staying in WAIT_FOR_SYMPTOM")
-            print(f"DEBUG: Showing no-match error message")
             messages = await self.dog_agent.respond(AgentContext(
                 session_id=session.session_id,
                 user_input=user_input,
@@ -318,7 +316,6 @@ class FlowHandlers:
             
             # Perform instinct analysis
             analysis_data = await self._analyze_instincts(symptom, user_input)
-            print(f"DEBUG: Analysis data: {analysis_data}")
 
             
             # Generate diagnosis from dog perspective
@@ -335,10 +332,8 @@ class FlowHandlers:
             )
             
             messages = await self.dog_agent.respond(agent_context)
-            print(f"DEBUG: Diagnosis messages: {len(messages)}")
             for i, msg in enumerate(messages):
-                print(f"DEBUG: Message {i}: type={msg.message_type}, text={msg.text[:50]}...")
-
+                pass  # Loop body was removed with debug statements
             
             # Add exercise offer question
             exercise_context = AgentContext(
@@ -348,16 +343,14 @@ class FlowHandlers:
             )
             
             exercise_messages = await self.dog_agent.respond(exercise_context)
-            print(f"DEBUG: Exercise messages: {len(exercise_messages)}")
             for i, msg in enumerate(exercise_messages):
-                print(f"DEBUG: Exercise msg {i}: type={msg.message_type}, text={msg.text[:50]}...")
+                pass  # Loop body was removed with debug statements
             messages.extend(exercise_messages)
             
             return messages
             
         except Exception as e:
             logger.error(f"Error in context input handler: {e}")
-            print(f"DEBUG: Full error in context handler: {e}")
             
             # Fallback to basic response
             agent_context = AgentContext(
@@ -391,7 +384,6 @@ class FlowHandlers:
         try:
             # Search for relevant exercise
             exercise_data = await self._find_exercise(session.active_symptom)
-            print(f"DEBUG: Found exercise data: {exercise_data[:100]}...")
             
             # Generate exercise response
             agent_context = AgentContext(
@@ -405,7 +397,6 @@ class FlowHandlers:
             )
             
             messages = await self.dog_agent.respond(agent_context)
-            print(f"DEBUG: Exercise response messages: {len(messages)}")
             
             # Add restart question
             restart_context = AgentContext(
@@ -668,7 +659,6 @@ class FlowHandlers:
             Exercise description string
         """
         try:
-            print(f"DEBUG _find_exercise: Searching for symptom: {symptom}")
             # Search exercise database
             exercise_results = await self.weaviate_service.search(
                 collection="Erziehung",
@@ -676,16 +666,13 @@ class FlowHandlers:
                 limit=3
             )
             
-            print(f"DEBUG: Found {len(exercise_results) if exercise_results else 0} exercise results")
             
             if exercise_results and len(exercise_results) > 0:
                 # Return best matching exercise
                 best_exercise = exercise_results[0]
-                print(f"DEBUG: Best exercise result: {best_exercise}")
 
                 text = best_exercise.get('properties', {}).get('anleitung', 'Keine spezifische Übung gefunden.')
 
-                print(f"DEBUG: Exercise text: {text[:100]}...")
                 return text
             
             # Fallback exercise
