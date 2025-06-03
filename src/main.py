@@ -219,7 +219,7 @@ async def add_rate_limit_headers(request: Request, call_next):
     
     # Add rate limit headers if they exist
     if hasattr(request.state, "view_rate_limit"):
-        response.headers["X-RateLimit-Limit"] = request.state.view_rate_limit
+        response.headers["X-RateLimit-Limit"] = str(request.state.view_rate_limit)
     if hasattr(request.state, "remaining"):
         response.headers["X-RateLimit-Remaining"] = str(request.state.remaining)
     if hasattr(request.state, "reset_time"):
