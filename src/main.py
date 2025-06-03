@@ -271,17 +271,31 @@ async def add_security_headers(request: Request, call_next):
     
     return response
 
-# CORS configuration - same as V1 for compatibility
+# CORS configuration - environment-aware
+production_origins = [
+    "https://app.wuffchat.de",
+    "https://api.wuffchat.de",
+    "https://dogbot-agent.osc-fr1.scalingo.io",
+    "https://dogbot-ui.osc-fr1.scalingo.io",
+]
+
+development_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+]
+
+# Only allow localhost in development (when no SCALINGO_APP env var)
+is_production = os.getenv("SCALINGO_APP") is not None
+allowed_origins = production_origins + ([] if is_production else development_origins)
+
+if not is_production:
+    logger.info("🔧 Development mode: localhost origins allowed in CORS")
+else:
+    logger.info("🔒 Production mode: localhost origins blocked in CORS")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://app.wuffchat.de",
-        "https://api.wuffchat.de",
-        "https://dogbot-agent.osc-fr1.scalingo.io",
-        "https://dogbot-ui.osc-fr1.scalingo.io",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000"
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],

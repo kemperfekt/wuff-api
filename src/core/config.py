@@ -50,8 +50,10 @@ def validate_required_settings():
         missing.append("WEAVIATE_API_KEY")
     
     if missing:
-        print(f"Warnung: Folgende Umgebungsvariablen fehlen: {', '.join(missing)}")
-        print("Die Anwendung kann möglicherweise nicht alle Funktionen bereitstellen.")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Fehlende Umgebungsvariablen: {', '.join(missing)}")
+        logger.warning("Die Anwendung kann möglicherweise nicht alle Funktionen bereitstellen.")
         return False
     
     return True

@@ -105,20 +105,17 @@ class DogAgent(BaseAgent):
         """
         try:
             # Debug: List available prompts
-            print(f"DEBUG: Available dog prompts: {self.prompt_manager.list_prompts(PromptCategory.DOG)}")
             
             # Try to get greeting prompts with fallbacks
             try:
                 greeting_text = self.prompt_manager.get_prompt(PromptType.DOG_GREETING)
             except Exception as e:
-                print(f"DEBUG: Failed to get DOG_GREETING: {e}")
                 # Fallback greeting
                 greeting_text = "Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe."
             
             try:
                 follow_up_text = self.prompt_manager.get_prompt(PromptType.DOG_GREETING_FOLLOWUP)
             except Exception as e:
-                print(f"DEBUG: Failed to get DOG_GREETING_FOLLOWUP: {e}")
                 # Fallback follow-up
                 follow_up_text = "Beschreib mir bitte, was du beobachtet hast."
             
@@ -128,7 +125,6 @@ class DogAgent(BaseAgent):
             ]
             
         except Exception as e:
-            print(f"ERROR in _handle_greeting: {e}")
             import traceback
             traceback.print_exc()
             # Return fallback messages instead of raising
@@ -173,7 +169,6 @@ class DogAgent(BaseAgent):
             raise V2AgentError(f"Unknown response mode: {response_mode}")
     
     async def _handle_question(self, context: AgentContext) -> List[V2AgentMessage]:
-        print(f"DEBUG: Entering _handle_question")
         """
         Generate question messages from dog perspective.
         
@@ -185,16 +180,13 @@ class DogAgent(BaseAgent):
         """
         question_type = context.metadata.get('question_type', 'confirmation')
         
-        print(f"DEBUG _handle_question: question_type={question_type}")
         
         if question_type == 'confirmation':
             text = self.prompt_manager.get_prompt(PromptType.DOG_CONFIRMATION_QUESTION)
         elif question_type == 'context':
             text = self.prompt_manager.get_prompt(PromptType.DOG_CONTEXT_QUESTION)
         elif question_type == 'exercise':
-            print(f"DEBUG: Getting exercise question")
             text = self.prompt_manager.get_prompt(PromptType.DOG_EXERCISE_QUESTION)
-            print(f"DEBUG: Exercise question text: {text}")
         elif question_type == 'restart':
             text = self.prompt_manager.get_prompt(PromptType.DOG_CONTINUE_OR_RESTART)
         elif question_type == 'ask_for_more':
@@ -314,13 +306,11 @@ class DogAgent(BaseAgent):
             List with diagnosis message
         """
        
-        print(f"DEBUG _generate_diagnosis: metadata={context.metadata}")
        
         analysis_data = context.metadata.get('analysis_data', {})
         primary_instinct = analysis_data.get('primary_instinct', 'unbekannter Instinkt')
         primary_description = analysis_data.get('primary_description', 'Keine Beschreibung verfügbar')
         
-        print(f"DEBUG: primary_instinct={primary_instinct}, primary_description={primary_description}")
 
         try:
             # Get all instinct descriptions from analysis data
@@ -340,12 +330,10 @@ class DogAgent(BaseAgent):
                 temperature=self._default_temperature
             )
 
-            print(f"DEBUG: Generated diagnosis text: {diagnosis_text[:50]}...")
             
             return [self.create_message(diagnosis_text, MessageType.RESPONSE)]
         
         except Exception as e:
-            print(f"DEBUG: Error generating diagnosis: {e}")
             import traceback
             traceback.print_exc()
             # Return error message
