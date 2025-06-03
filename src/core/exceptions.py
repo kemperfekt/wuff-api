@@ -310,6 +310,30 @@ class SessionError(V2BaseException):
             self.details['session_id'] = session_id
 
 
+class V2SecurityError(V2BaseException):
+    """Errors in security validation and authentication"""
+    
+    def __init__(
+        self,
+        message: str,
+        error_type: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Initialize security error.
+        
+        Args:
+            message: Error description
+            error_type: Type of security error (auth, token, expiration)
+            details: Additional security context
+        """
+        super().__init__(message, details)
+        self.error_type = error_type
+        
+        if error_type:
+            self.details['error_type'] = error_type
+
+
 class MessageError(V2BaseException):
     """Errors in message processing and formatting"""
     
