@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Environment
+.env
+venv/
+.venv/
+
+# Data
+*.pkl
+*.db
+*.sqlite3
+*.log
+*.csv
+*.json
+
+# IDE
+.vscode/
+.idea/
+
+#UI
+assets/
+
+# Misc
+.DS_Store
+tech_strategy.md
+modules.png
+.CLAUDE_CONTENT/
+CLAUDE.md
+deployment-log.txt
+Archive
+generation_prompts_old.py

@@ -1,0 +1,16 @@
+aiohttp
+fastapi
+openai
+pydantic
+pydantic-settings   
+python-dotenv
+pytest
+pytest-asyncio
+pytest-cov
+redis
+requests
+slowapi
+uvicorn[standard]
+weaviate-client
+weaviate-client[agents]
+
