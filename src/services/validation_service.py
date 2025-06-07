@@ -174,8 +174,8 @@ class ValidationService:
     """
     
     # Validation thresholds
-    MIN_SYMPTOM_LENGTH = 25      # Substantial input required
-    MIN_CONTEXT_LENGTH = 25      # Context needs detail too
+    MIN_SYMPTOM_LENGTH = 15      # Substantial input required
+    MIN_CONTEXT_LENGTH = 15      # Context needs detail too
     MIN_FEEDBACK_LENGTH = 1      # Feedback can be brief
     
     def __init__(self, gpt_service: Optional["GPTService"] = None):
