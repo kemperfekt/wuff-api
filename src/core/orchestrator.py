@@ -126,7 +126,7 @@ class V2Orchestrator:
             await self._ensure_services_initialized()
             
             if self.enable_logging:
-                logger.info(f"V2 handling message for session {session_id}: '{user_input[:50]}...'")
+                logger.info(f"V2 handling message for session {session_id[:8]}...: '{user_input[:50]}...'")
             
             # Get or create session
             session = self.session_store.get_or_create(session_id)
@@ -226,7 +226,7 @@ class V2Orchestrator:
             # Ensure services are initialized before processing
             await self._ensure_services_initialized()
             
-            logger.info(f"Starting new V2 conversation for session {session_id}")
+            logger.info(f"Starting new V2 conversation for session {session_id[:8]}...")
             
             # Get or create session
             session = self.session_store.get_or_create(session_id)

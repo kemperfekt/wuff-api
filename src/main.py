@@ -28,6 +28,7 @@ from src.models.flow_models import FlowStep
 from src.core.logging_config import setup_logging
 from src.core.rate_limit_config import get_real_ip, RATE_LIMIT_TIERS
 from src.core.security import init_secure_session_store, get_secure_session_store
+from src.core.config import Settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -138,7 +139,7 @@ def get_api_key():
         api_key = secrets.token_urlsafe(32)
         logger.warning("⚠️ No WUFFCHAT_API_KEY set. Generated temporary key.")
         logger.warning("⚠️ Set WUFFCHAT_API_KEY environment variable for production!")
-        logger.warning(f"⚠️ Temporary key (first 8 chars): {api_key[:8]}...")
+        logger.warning("⚠️ Using temporary key for this session only.")
     else:
         logger.info("✅ API Key configured from environment")
     return api_key
@@ -216,6 +217,29 @@ app.state.limiter = limiter
 
 # Use rate limit configurations from config
 RATE_LIMITS = RATE_LIMIT_TIERS["default"]
+
+# Load settings for configuration
+settings = Settings()
+
+# Request size limit middleware
+@app.middleware("http")
+async def limit_request_size(request: Request, call_next):
+    """Limit request body size to prevent DoS attacks"""
+    MAX_REQUEST_SIZE = settings.MAX_REQUEST_SIZE_MB * 1024 * 1024  # Convert MB to bytes
+    
+    if request.method in ["POST", "PUT", "PATCH"]:
+        content_length = request.headers.get("content-length")
+        if content_length:
+            content_length = int(content_length)
+            if content_length > MAX_REQUEST_SIZE:
+                logger.warning(f"🚫 Request too large: {content_length} bytes from {get_real_ip(request)}")
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Request entity too large. Maximum size is {settings.MAX_REQUEST_SIZE_MB}MB."
+                )
+    
+    response = await call_next(request)
+    return response
 
 # Request logging middleware
 @app.middleware("http")
@@ -453,11 +477,11 @@ async def flow_step(request: Request, req: MessageRequest):
         # Get legacy session for orchestrator
         legacy_session = session_store.get_or_create(req.session_id)
         if not legacy_session:
-            logger.warning(f"[V2] Legacy session not found: {req.session_id}")
+            logger.warning(f"[V2] Legacy session not found: {req.session_id[:8]}...")
             raise HTTPException(status_code=404, detail="Session not found")
         
         # Debug output before processing
-        logger.info(f"[V2] Verarbeite Nachricht - Session ID: {legacy_session.session_id}, Step: {legacy_session.current_step}")
+        logger.info(f"[V2] Verarbeite Nachricht - Session ID: {legacy_session.session_id[:8]}..., Step: {legacy_session.current_step}")
         logger.debug(f"[V2] Benutzer-Nachricht: {req.message}")
         
         # Process message using V2 orchestrator
@@ -471,7 +495,7 @@ async def flow_step(request: Request, req: MessageRequest):
         legacy_session = session_store.get_or_create(req.session_id)
         
         # Debug output after processing
-        logger.info(f"[V2] Nachricht verarbeitet - Session ID: {legacy_session.session_id}, neuer Step: {legacy_session.current_step}")
+        logger.info(f"[V2] Nachricht verarbeitet - Session ID: {legacy_session.session_id[:8]}..., neuer Step: {legacy_session.current_step}")
         logger.debug(f"[V2] Antwort-Nachrichten: {len(messages)} messages")
         for msg in messages:
             logger.debug(f"  - {msg['sender']}: {msg['text'][:50]}...")

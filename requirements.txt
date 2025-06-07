@@ -1,16 +1,37 @@
-aiohttp
-fastapi
-openai
-pydantic
-pydantic-settings   
-python-dotenv
-pytest
-pytest-asyncio
-pytest-cov
-redis
-requests
-slowapi
-uvicorn[standard]
-weaviate-client
-weaviate-client[agents]
+# Main dependencies with security-pinned versions
+# Updated: 2025-01-06 for security compliance
+
+# Core web framework
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+
+# HTTP and async
+aiohttp==3.12.9
+
+# Data validation
+pydantic==2.11.5
+pydantic-settings==2.9.1
+
+# Configuration
+python-dotenv==1.1.0
+
+# AI services
+openai==1.84.0
+
+# Vector database
+weaviate-client==4.15.0
+
+# Caching
+redis==6.2.0
+
+# HTTP requests
+requests==2.32.3
+
+# Rate limiting
+slowapi==0.1.9
+
+# Testing
+pytest==8.4.0
+pytest-asyncio==1.0.0
+pytest-cov==6.1.1
 

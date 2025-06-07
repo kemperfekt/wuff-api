@@ -92,7 +92,7 @@ class FlowHandlers:
         Returns:
             List of greeting messages from dog agent
         """
-        logger.info(f"Handling greeting for session {session.session_id}")
+        logger.info(f"Handling greeting for session {session.session_id[:8]}...")
         
         try:
             # Create context for dog agent
@@ -535,7 +535,7 @@ class FlowHandlers:
         Returns:
             List of completion messages from companion agent
         """
-        logger.info(f"Handling feedback completion for session {session.session_id}")
+        logger.info(f"Handling feedback completion for session {session.session_id[:8]}...")
         
         try:
             # Store final answer in feedback list
@@ -715,7 +715,7 @@ class FlowHandlers:
                     expire=7776000  # 90 days
                 )
             
-            logger.info(f"Feedback saved for session {session.session_id}")
+            logger.info(f"Feedback saved for session {session.session_id[:8]}...")
             return True
             
         except Exception as e:

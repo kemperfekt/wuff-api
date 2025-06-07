@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Speicher-Einstellungen
     SESSION_LOG_PATH: str = "data"
     
+    # Security-Einstellungen
+    MAX_REQUEST_SIZE_MB: int = Field(default=1, description="Maximum request size in MB")
+    
     # RAG-Einstellungen
     DEFAULT_COLLECTION: str = "Symptom"
     TOP_K_RESULTS: int = 3
