@@ -301,6 +301,8 @@ production_origins = [
     "https://api.wuffchat.de",
     "https://dogbot-agent.osc-fr1.scalingo.io",
     "https://dogbot-ui.osc-fr1.scalingo.io",
+    "https://wuffchat-api.osc-fr1.scalingo.io",
+    "https://wuffchat-web.osc-fr1.scalingo.io",
 ]
 
 development_origins = [
