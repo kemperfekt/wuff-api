@@ -83,17 +83,7 @@ async def lifespan(app: FastAPI):
         # Create a simple background task to log periodically
         import asyncio
         
-        async def heartbeat():
-            """Log heartbeat to show app is running"""
-            count = 0
-            instance_id = os.getenv("HOSTNAME", "unknown")[:8]
-            while True:
-                await asyncio.sleep(5)
-                count += 1
-                logger.info(f"💓 Heartbeat {count} - Instance {instance_id} running on port {port}")
-        
-        # Start heartbeat task
-        asyncio.create_task(heartbeat())
+        # Heartbeat logging removed - was too verbose for development
         
         # Log that we're ready for connections
         logger.info("🟢 Server is ready to accept connections")
@@ -346,6 +336,18 @@ class MessageRequest(BaseModel):
     session_token: str  # NEW: Required for session security
     message: str
 
+class CompanionFeedbackRequest(BaseModel):
+    session_id: str
+    emoji_feedback: str  # 😊🤔😕💡❓
+    comment: Optional[str] = None
+    current_state: Optional[str] = None
+    conversation_context: Optional[List[Dict[str, Any]]] = None
+
+class CompanionFeedbackResponse(BaseModel):
+    status: str
+    message: str
+    feedback_id: str
+
 
 @app.get("/", status_code=200)
 def read_root():
@@ -403,9 +405,14 @@ async def flow_intro_options():
     """Handle preflight requests for flow_intro"""
     return {"status": "ok"}
 
+@app.options("/companion-feedback")
+async def companion_feedback_options():
+    """Handle preflight requests for companion-feedback"""
+    return {"status": "ok"}
+
 
 @app.post("/flow_intro", response_model=IntroResponse, dependencies=[Depends(verify_api_key)])
-@limiter.limit(RATE_LIMITS["flow_intro"])
+@limiter.limit(RATE_LIMIT_TIERS["default"]["flow_intro"])
 async def flow_intro(request: Request):
     """
     Start a new conversation - V2 implementation.
@@ -458,7 +465,7 @@ async def flow_step_options():
 
 
 @app.post("/flow_step", dependencies=[Depends(verify_api_key)])
-@limiter.limit(RATE_LIMITS["flow_step"])
+@limiter.limit(RATE_LIMIT_TIERS["default"]["flow_step"])
 async def flow_step(request: Request, req: MessageRequest):
     """
     Process a conversation step - V2 implementation.
@@ -516,6 +523,91 @@ async def flow_step(request: Request, req: MessageRequest):
         raise HTTPException(
             status_code=500,
             detail=get_safe_error_message(e, "flow_step")
+        )
+
+
+@app.post("/companion-feedback", response_model=CompanionFeedbackResponse, dependencies=[Depends(verify_api_key)])
+@limiter.limit(RATE_LIMIT_TIERS["default"]["global"])
+async def companion_feedback(request: Request, req: CompanionFeedbackRequest):
+    """
+    Quick feedback capture via Companion flyout.
+    
+    This endpoint allows users to provide immediate feedback without interrupting
+    the conversation flow. It's designed to be called from a non-intrusive UI element.
+    """
+    try:
+        import uuid
+        import json
+        from datetime import datetime
+        
+        # Generate unique feedback ID
+        feedback_id = str(uuid.uuid4())[:8]
+        
+        # Create feedback data structure
+        feedback_data = {
+            "feedback_id": feedback_id,
+            "session_id": req.session_id,
+            "timestamp": datetime.now().isoformat(),
+            "emoji_feedback": req.emoji_feedback,
+            "comment": req.comment,
+            "current_state": req.current_state,
+            "conversation_context": req.conversation_context[-3:] if req.conversation_context else None,  # Last 3 messages
+            "user_ip": get_real_ip(request)
+        }
+        
+        # Store in Redis if available, otherwise log
+        try:
+            if orchestrator and orchestrator.redis_service:
+                # Store in Redis with 30-day expiration
+                redis_key = f"companion_feedback:{feedback_id}"
+                await orchestrator.redis_service.set(
+                    redis_key, 
+                    json.dumps(feedback_data),
+                    expire=30 * 24 * 60 * 60  # 30 days
+                )
+                
+                # Also add to session-specific feedback list
+                session_feedback_key = f"session_feedback:{req.session_id}"
+                await orchestrator.redis_service.lpush(session_feedback_key, feedback_id)
+                await orchestrator.redis_service.expire(session_feedback_key, 30 * 24 * 60 * 60)
+                
+                logger.info(f"[Companion] Feedback stored in Redis: {feedback_id}")
+            else:
+                # Fallback: log feedback data
+                logger.info(f"[Companion] Feedback received: {json.dumps(feedback_data, indent=2)}")
+                
+        except Exception as storage_error:
+            # If storage fails, still log the feedback
+            logger.warning(f"[Companion] Storage failed, logging feedback: {storage_error}")
+            logger.info(f"[Companion] Feedback data: {json.dumps(feedback_data, indent=2)}")
+        
+        # Determine response message based on emoji
+        response_messages = {
+            "😊": "Freut mich, dass es dir gefällt!",
+            "🤔": "Danke für das Feedback - lass uns das verbessern!",
+            "😕": "Das tut mir leid - dein Feedback hilft uns!",
+            "💡": "Tolle Idee! Wir notieren uns das.",
+            "❓": "Danke für die Frage - wir schauen uns das an."
+        }
+        
+        response_message = response_messages.get(
+            req.emoji_feedback, 
+            "Danke für dein Feedback!"
+        )
+        
+        logger.info(f"[Companion] Feedback captured: Session={req.session_id[:8]}..., Emoji={req.emoji_feedback}, Comment={'Yes' if req.comment else 'No'}")
+        
+        return CompanionFeedbackResponse(
+            status="success",
+            message=response_message,
+            feedback_id=feedback_id
+        )
+        
+    except Exception as e:
+        logger.error(f"[Companion] Error capturing feedback: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Feedback konnte nicht gespeichert werden. Versuche es später nochmal."
         )
 
 
