@@ -33,6 +33,12 @@ class SessionState(BaseModel):
     feedback: List[str] = Field(default_factory=list)
     messages: List[AgentMessage] = Field(default_factory=list)
     match_distance: Optional[float] = None
+    
+    # User dog information for rapport building
+    user_dog_name: Optional[str] = None
+    user_dog_breed: Optional[str] = None
+    user_name: Optional[str] = None
+    dog_info_collected: bool = False
 
 
 class SessionStore:

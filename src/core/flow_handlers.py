@@ -19,6 +19,7 @@ from src.services.gpt_service import GPTService
 from src.services.weaviate_service import WeaviateService
 from src.services.redis_service import RedisService
 from src.services.validation_service import ValidationService
+from src.services.rapport_service import RapportService
 from src.core.prompt_manager import PromptManager, PromptType
 from src.core.exceptions import V2FlowError, V2ValidationError
 
@@ -60,9 +61,11 @@ class FlowHandlers:
         self.weaviate_service = weaviate_service or WeaviateService()
         self.redis_service = redis_service or RedisService()
         self.validation_service = validation_service or ValidationService(gpt_service=self.gpt_service)
+        self.rapport_service = RapportService()
         
         # Initialize agents with services
         self.dog_agent = dog_agent or DogAgent(
+            personality="balu",
             prompt_manager=self.prompt_manager,
             gpt_service=self.gpt_service,
             weaviate_service=self.weaviate_service
@@ -99,7 +102,8 @@ class FlowHandlers:
             agent_context = AgentContext(
                 session_id=session.session_id,
                 user_input=user_input,
-                message_type=MessageType.GREETING
+                message_type=MessageType.GREETING,
+                metadata={}
             )
             
             # Get greeting messages from dog agent
@@ -185,6 +189,12 @@ class FlowHandlers:
         # Store symptom in state
         session.active_symptom = user_input
         
+        # Extract dog information for rapport building
+        dog_info = await self.rapport_service.extract_dog_info(user_input, session)
+        if dog_info:
+            self.rapport_service.update_session_with_dog_info(session, dog_info)
+            logger.info(f"Extracted dog info: {dog_info}")
+        
         if match_found and match_data:
             # Generate dog perspective with match
             messages = await self.dog_agent.respond(AgentContext(
@@ -193,7 +203,10 @@ class FlowHandlers:
                 message_type=MessageType.RESPONSE,
                 metadata={
                     "response_mode": "perspective_only",
-                    "match_data": match_data
+                    "match_data": match_data,
+                    "detected_dog_info": dog_info,
+                    "user_dog_name": session.user_dog_name,
+                    "user_dog_breed": session.user_dog_breed
                 }
             ))
             
@@ -318,6 +331,11 @@ class FlowHandlers:
             analysis_data = await self._analyze_instincts(symptom, user_input)
 
             
+            # Extract dog info from context input too
+            dog_info = await self.rapport_service.extract_dog_info(user_input, session)
+            if dog_info:
+                self.rapport_service.update_session_with_dog_info(session, dog_info)
+            
             # Generate diagnosis from dog perspective
             agent_context = AgentContext(
                 session_id=session.session_id,
@@ -327,7 +345,9 @@ class FlowHandlers:
                     'response_mode': 'diagnosis',
                     'analysis_data': analysis_data,
                     'symptom': symptom,
-                    'context': user_input
+                    'context': user_input,
+                    'detected_dog_info': dog_info,
+                    'user_dog_breed': session.user_dog_breed
                 }
             )
             

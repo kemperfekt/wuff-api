@@ -10,7 +10,8 @@ from typing import List, Dict, Optional, Any
 from src.agents.base_agent import BaseAgent, AgentContext, MessageType, V2AgentMessage
 from src.core.exceptions import V2AgentError, V2ValidationError
 from src.core.prompt_manager import PromptType, PromptCategory
-from src.prompts.generation_prompts import DOG_AGENT_SYSTEM
+from src.prompts.generation_prompts import DOG_AGENT_SYSTEM, BALU_AGENT_SYSTEM
+import random
 
 
 class DogAgent(BaseAgent):
@@ -28,17 +29,170 @@ class DogAgent(BaseAgent):
     is handled by the flow engine and services.
     """
     
-    def __init__(self, **kwargs):
-        """Initialize DogAgent with dog-specific configuration."""
+    def __init__(self, personality="balu", **kwargs):
+        """Initialize DogAgent with personality configuration."""
         super().__init__(
-            name="Hund",
+            name="Balu" if personality == "balu" else "Hund",
             role="dog",
             **kwargs
         )
         
+        # Personality configuration
+        self.personality_type = personality
+        
         # Dog-specific message configuration
         self._default_temperature = 0.8  # More personality for dog responses
-        self._system_prompt = DOG_AGENT_SYSTEM
+        self._system_prompt = BALU_AGENT_SYSTEM if personality == "balu" else DOG_AGENT_SYSTEM
+        
+        # Balu's personality traits
+        if personality == "balu":
+            self.personality = {
+                "breed": "Labrador",
+                "demeanor": "calm_observer",
+                "energy_level": 0.3,
+                "wisdom_level": 0.8,
+                "observational_skills": 0.9
+            }
+            
+            self.balu_greetings = [
+                "*(aufmerksam-blick)* Oh, ein Mensch mit Fragen... *(gemütlich-hinleg)* Ich bin Balu. Ich beobachte gerne, wie Menschen und Hunde miteinander umgehen. *(ruhig)* Erzähl mal, was dich zu mir führt?",
+                
+                "*(kopf-heb)* Ah, du bist da. *(schwanzwedel-sanft)* Ich bin Balu, ein Labrador der lieber beobachtet als apportiert. *(schmunzel)* Was ich dabei über Hunde gelernt habe? Eine Menge. Was möchtest du über deinen Hund verstehen?",
+                
+                "*(tief-atme)* Willkommen. *(ruhiger-blick)* Ich bin Balu. Während andere Labradore jedem Ball hinterherrennen, sitze ich hier und... verstehe. *(aufmerksam)* Menschen, Hunde, ihre Tänze miteinander. Was beschäftigt dich?",
+                
+                "*(beobachte-ruhig)* Hallo... *(nachdenklich)* Ich bin Balu. Als Labrador sehe ich die Welt anders - ruhiger, aufmerksamer. *(verstehend-nick)* Erzähl mir von deinem Fellfreund. Was puzzelt dich?"
+            ]
+            
+            self.balu_followups = [
+                "*(neugierig-schnüffel)* Wie heißt denn dein Fellfreund? Ich merke mir gerne Namen... macht alles persönlicher.",
+                "*(aufmerksam)* Erzähl mir von eurem Alltag... was ist da los?",
+                "*(ruhig-warten)* Nimm dir Zeit... ich höre zu.",
+                "*(interessiert)* Was bewegt dich? Ich bin ganz Ohr..."
+            ]
+        else:
+            self.personality = None
+            self.balu_greetings = None
+            self.balu_followups = None
+    
+    def _detect_user_energy(self, user_input: str) -> str:
+        """Detect user's emotional energy for Balu's mirroring capability."""
+        if self.personality_type != "balu":
+            return "neutral"
+            
+        user_input_lower = user_input.lower()
+        
+        # High concern/stress indicators
+        if any(word in user_input_lower for word in ["hilfe!", "verzweifelt", "total", "ständig", "immer", "nie", "katastrophe"]):
+            return "high_concern"
+        # Moderate concern indicators
+        elif any(word in user_input_lower for word in ["manchmal", "bisschen", "ab und zu", "oft", "probleme"]):
+            return "moderate_concern"
+        # Calm/neutral indicators
+        else:
+            return "calm"
+    
+    def _add_balu_energy_mirror(self, base_response: str, user_input: str) -> str:
+        """Add Balu's energy mirroring to responses."""
+        if self.personality_type != "balu":
+            return base_response
+            
+        user_energy = self._detect_user_energy(user_input)
+        
+        # Add appropriate opening based on detected energy
+        energy_openers = {
+            "high_concern": "*(aufmerksam-werd)* Ich spüre deine Sorge... *(ruhig-atme)* ",
+            "moderate_concern": "*(nachdenklich-blick)* Hmm, das beschäftigt dich, oder? *(verstehend)* ",
+            "calm": "*(beobachte-ruhig)* *(aufmerksam)* "
+        }
+        
+        opener = energy_openers.get(user_energy, "*(aufmerksam)* ")
+        
+        # Add contemplative ending
+        contemplative_endings = [
+            " *(nachdenklich)* Das ist meine Erfahrung als Labrador...",
+            " *(ruhig)* So sehe ich das als beobachtender Hund.",
+            " *(verstehend-nick)* Kennst du das Gefühl?",
+            " *(aufmerksam)* Macht das Sinn für dich?"
+        ]
+        
+        ending = random.choice(contemplative_endings)
+        
+        return opener + base_response + ending
+    
+    
+    def format_dog_info_acknowledgment(self, dog_info: dict) -> str:
+        """Format Balu's acknowledgment when dog information is detected."""
+        if self.personality_type != "balu" or not dog_info:
+            return ""
+            
+        responses = []
+        
+        if "dog_name" in dog_info:
+            name = dog_info["dog_name"]
+            responses.append(f"*(freudig-wedelnd)* {name}! Was für ein schöner Name! *(merke-mir-gut)* Ich werde mir das merken.")
+            
+        if "dog_breed" in dog_info:
+            breed = dog_info["dog_breed"]
+            responses.append(f"*(interessiert)* Ein {breed}! *(nachdenklich)* Interessante Rasse... jede hat ihre Eigenarten.")
+            
+        if responses:
+            return " ".join(responses) + " *(aufmerksam)* "
+        
+        return ""
+    
+    async def _get_breed_context(self, breed_name: str) -> Optional[str]:
+        """Get breed-specific context from Weaviate if available."""
+        if not breed_name or self.personality_type != "balu":
+            return None
+            
+        try:
+            # Try to query the Rassen collection for breed information
+            # This requires the WeaviateService to be available
+            if hasattr(self, 'weaviate_service') and self.weaviate_service:
+                # Simple breed lookup - can be enhanced later
+                breed_query = f"breed:{breed_name}"
+                results = await self.weaviate_service.search_collection(
+                    "Rassen", 
+                    breed_query, 
+                    limit=1
+                )
+                
+                if results and len(results) > 0:
+                    breed_data = results[0]
+                    # Extract relevant breed information
+                    return f"Bei {breed_name}s ist charakteristisch..."
+                    
+        except Exception as e:
+            # Don't fail if breed lookup fails
+            pass
+            
+        return None
+    
+    def format_with_breed_insight(self, response: str, breed: Optional[str]) -> str:
+        """Add breed-specific insights to responses when available."""
+        if self.personality_type != "balu" or not breed:
+            return response
+        
+        # Simple breed insights - can be enhanced with Weaviate data
+        breed_insights = {
+            "Golden Retriever": "bei Golden Retrievers mit ihrem starken Rudelinstinkt",
+            "Border Collie": "bei Border Collies mit ihrem ausgeprägten Hüteverhalten", 
+            "Husky": "bei Huskys mit ihrem Bewegungsdrang",
+            "Beagle": "bei Beagles mit ihrem starken Jagdinstinkt",
+            "Labrador": "bei Labradors mit ihrer Freundlichkeit"
+        }
+        
+        insight = breed_insights.get(breed)
+        if insight:
+            # Add breed context naturally
+            if "das ist" in response.lower():
+                response = response.replace(
+                    "Das ist", 
+                    f"Das ist typisch {insight} - das ist"
+                )
+        
+        return response
         
     def get_supported_message_types(self) -> List[MessageType]:
         """Return message types this agent supports."""
@@ -104,9 +258,22 @@ class DogAgent(BaseAgent):
             List of greeting messages
         """
         try:
-            # Debug: List available prompts
+            # Use Balu's personality greetings if available
+            if self.personality_type == "balu" and self.balu_greetings:
+                greeting_text = random.choice(self.balu_greetings)
+                follow_up_text = random.choice(self.balu_followups)
+                
+                return [
+                    self.create_message(greeting_text, MessageType.GREETING, metadata={
+                        "personality": "balu_calm_observer",
+                        "greeting_variation": "random_selection"
+                    }),
+                    self.create_message(follow_up_text, MessageType.QUESTION, metadata={
+                        "personality": "balu_gentle_inquiry"
+                    })
+                ]
             
-            # Try to get greeting prompts with fallbacks
+            # Fallback to original prompts for non-Balu personalities
             try:
                 greeting_text = self.prompt_manager.get_prompt(PromptType.DOG_GREETING)
             except Exception as e:
@@ -127,17 +294,29 @@ class DogAgent(BaseAgent):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            # Return fallback messages instead of raising
-            return [
-                self.create_message(
-                    "Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe.",
-                    MessageType.GREETING
-                ),
-                self.create_message(
-                    "Was ist los? Beschreib mir bitte, was du beobachtet hast.",
-                    MessageType.QUESTION
-                )
-            ]
+            # Return fallback messages based on personality
+            if self.personality_type == "balu":
+                return [
+                    self.create_message(
+                        "*(aufmerksam-blick)* Ich bin Balu... *(ruhig)* Erzähl mir von deinem Hund.",
+                        MessageType.GREETING
+                    ),
+                    self.create_message(
+                        "*(geduldig-warten)* Was beschäftigt euch?",
+                        MessageType.QUESTION
+                    )
+                ]
+            else:
+                return [
+                    self.create_message(
+                        "Wuff! Schön, dass Du da bist. Bitte nenne mir ein Verhalten und ich schildere dir, wie ich es erlebe.",
+                        MessageType.GREETING
+                    ),
+                    self.create_message(
+                        "Was ist los? Beschreib mir bitte, was du beobachtet hast.",
+                        MessageType.QUESTION
+                    )
+                ]
     
     async def _handle_response(self, context: AgentContext) -> List[V2AgentMessage]:
         """
@@ -266,6 +445,13 @@ class DogAgent(BaseAgent):
         analysis_data = context.metadata.get('analysis_data', {})
         match_data = context.metadata.get('match_data', '')
         
+        # Check if we have detected dog info to acknowledge
+        dog_info_response = ""
+        if self.personality_type == "balu":
+            detected_dog_info = context.metadata.get('detected_dog_info', {})
+            if detected_dog_info:
+                dog_info_response = self.format_dog_info_acknowledgment(detected_dog_info)
+        
         # Use PromptManager to get dog perspective prompt and generate response
         if match_data:
             # Use match-based perspective if we have exact match
@@ -292,6 +478,33 @@ class DogAgent(BaseAgent):
                 sexual=all_instincts.get('sexual', ''),
                 temperature=self._default_temperature
             )
+        
+        # Enhance with Balu's personality if enabled
+        if self.personality_type == "balu":
+            # Add dog info response if we detected any
+            if dog_info_response:
+                dog_perspective = dog_info_response + dog_perspective
+                
+            enhanced_perspective = self._add_balu_energy_mirror(dog_perspective, context.user_input)
+            
+            # Reference dog by name if we know it
+            user_dog_name = context.metadata.get('user_dog_name')
+            if user_dog_name:
+                # Add personal reference occasionally
+                if "das verhalten" in enhanced_perspective.lower():
+                    enhanced_perspective = enhanced_perspective.replace(
+                        "das verhalten", 
+                        f"was {user_dog_name} da macht"
+                    )
+            
+            return [self.create_message(
+                enhanced_perspective, 
+                MessageType.RESPONSE,
+                metadata={
+                    "personality": "balu_perspective",
+                    "energy_mirroring": self._detect_user_energy(context.user_input)
+                }
+            )]
         
         return [self.create_message(dog_perspective, MessageType.RESPONSE)]
     
@@ -330,6 +543,25 @@ class DogAgent(BaseAgent):
                 temperature=self._default_temperature
             )
 
+            
+            # Enhance with Balu's thoughtful approach if enabled
+            if self.personality_type == "balu":
+                balu_intro = "*(nachdenklich)* Lass mich das mal aus Hundesicht erklären... *(aufmerksam)* "
+                enhanced_diagnosis = balu_intro + diagnosis_text
+                
+                # Add breed-specific insights if available
+                dog_breed = context.metadata.get('user_dog_breed')
+                if dog_breed:
+                    enhanced_diagnosis = self.format_with_breed_insight(enhanced_diagnosis, dog_breed)
+                
+                return [self.create_message(
+                    enhanced_diagnosis,
+                    MessageType.RESPONSE,
+                    metadata={
+                        "personality": "balu_diagnosis",
+                        "approach": "thoughtful_analysis"
+                    }
+                )]
             
             return [self.create_message(diagnosis_text, MessageType.RESPONSE)]
         
@@ -411,6 +643,24 @@ class DogAgent(BaseAgent):
             # if response_mode == 'exercise' and not context.metadata.get('exercise_data'):
             #     raise V2ValidationError("Exercise response mode requires 'exercise_data' in metadata")
     
+    def create_message(self, text: str, message_type: MessageType, metadata: Optional[Dict[str, Any]] = None) -> V2AgentMessage:
+        """
+        Override to add personality metadata to all messages.
+        """
+        if metadata is None:
+            metadata = {}
+        
+        # Add personality metadata for Balu
+        if self.personality_type == "balu":
+            metadata.update({
+                "agent_personality": "balu_calm_observer",
+                "agent_breed": "labrador",
+                "energy_level": self.personality.get("energy_level", 0.3),
+                "wisdom_level": self.personality.get("wisdom_level", 0.8)
+            })
+        
+        return super().create_message(text, message_type, metadata)
+
     def create_error_message(self, error_msg: str) -> V2AgentMessage:
         """
         Override to create dog-specific error messages.
@@ -425,7 +675,10 @@ class DogAgent(BaseAgent):
         try:
             friendly_msg = self.prompt_manager.get_prompt(PromptType.DOG_TECHNICAL_ERROR)
         except:
-            # Ultimate fallback
-            friendly_msg = "Wuff! Entschuldige, ich bin gerade etwas verwirrt. Kannst du es nochmal versuchen?"
+            # Ultimate fallback based on personality
+            if self.personality_type == "balu":
+                friendly_msg = "*(verwirrt-blick)* Entschuldige, ich bin gerade etwas durcheinander... *(ruhig)* Kannst du es nochmal versuchen?"
+            else:
+                friendly_msg = "Wuff! Entschuldige, ich bin gerade etwas verwirrt. Kannst du es nochmal versuchen?"
         
         return self.create_message(friendly_msg, MessageType.ERROR)
