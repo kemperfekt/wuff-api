@@ -14,6 +14,7 @@ from src.models.session_state import SessionState
 from src.models.flow_models import FlowStep
 from src.agents.dog_agent import DogAgent
 from src.agents.companion_agent import CompanionAgent
+from src.agents.agentic_dog_agent import AgenticDogAgent
 from src.agents.base_agent import AgentContext, MessageType, V2AgentMessage
 from src.services.gpt_service import GPTService
 from src.services.weaviate_service import WeaviateService
@@ -38,6 +39,7 @@ class FlowHandlers:
         self,
         dog_agent: Optional[DogAgent] = None,
         companion_agent: Optional[CompanionAgent] = None,
+        agentic_dog_agent: Optional[AgenticDogAgent] = None,
         gpt_service: Optional[GPTService] = None,
         weaviate_service: Optional[WeaviateService] = None,
         redis_service: Optional[RedisService] = None,
@@ -74,6 +76,13 @@ class FlowHandlers:
         self.companion_agent = companion_agent or CompanionAgent(
             prompt_manager=self.prompt_manager,
             redis_service=self.redis_service
+        )
+        
+        # Initialize agentic dog agent
+        self.agentic_dog_agent = agentic_dog_agent or AgenticDogAgent(
+            prompt_manager=self.prompt_manager,
+            gpt_service=self.gpt_service,
+            weaviate_service=self.weaviate_service
         )
         
         logger.info("FlowHandlers initialized with V2 services and agents")
@@ -764,3 +773,258 @@ class FlowHandlers:
         if sentences and len(sentences[0]) > 20:
             return sentences[0].strip()
         return gpt_response[:100].strip()
+    
+    # ===========================================
+    # AGENTIC FLOW HANDLERS
+    # ===========================================
+    
+    async def handle_greeting_to_agentic(
+        self, 
+        session: SessionState, 
+        user_input: str, 
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Handle greeting and transition to agentic information collection.
+        """
+        logger.info(f"Starting agentic flow for session {session.session_id[:8]}...")
+        
+        try:
+            # Create context for agentic dog agent
+            agent_context = AgentContext(
+                session_id=session.session_id,
+                user_input=user_input,
+                message_type=MessageType.GREETING,
+                metadata={}
+            )
+            
+            # Get greeting from agentic dog agent
+            agentic_response = await self.agentic_dog_agent.respond(agent_context)
+            
+            # Convert to V2AgentMessage format
+            message = V2AgentMessage(
+                sender="dog",  # Use "dog" for UI compatibility
+                text=agentic_response.message,
+                message_type="greeting",
+                metadata={
+                    "phase": agentic_response.phase.value,
+                    "information_status": agentic_response.information_collected.model_dump(),
+                    "cost_info": agentic_response.cost_info
+                }
+            )
+            
+            return [message]
+            
+        except Exception as e:
+            logger.error(f"Agentic greeting failed: {e}", exc_info=True)
+            # Fallback to regular greeting
+            return await self.handle_greeting(session, user_input, context)
+    
+    async def handle_agentic_collection(
+        self,
+        session: SessionState,
+        user_input: str,
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Handle user input during agentic information collection phase.
+        """
+        logger.info(f"Processing agentic collection for session {session.session_id[:8]}...")
+        
+        try:
+            # Create context for agentic dog agent with session state
+            agent_context = AgentContext(
+                session_id=session.session_id,
+                user_input=user_input,
+                message_type=MessageType.RESPONSE,
+                metadata={"session_state": session}
+            )
+            
+            # Process input with agentic dog agent
+            agentic_response = await self.agentic_dog_agent.respond(agent_context)
+            
+            # Update session state with extracted information
+            info_status = agentic_response.information_collected
+            if info_status.dog_name:
+                session.user_dog_name = info_status.dog_name
+            if info_status.dog_breed:
+                session.user_dog_breed = info_status.dog_breed
+            if info_status.main_concern:
+                session.active_symptom = info_status.main_concern
+            
+            # Check if we should transition to next phase
+            if agentic_response.should_transition:
+                # Update session state for transition
+                if agentic_response.next_flow_step:
+                    session.current_step = FlowStep(agentic_response.next_flow_step)
+                    
+            # Convert to V2AgentMessage format
+            message = V2AgentMessage(
+                sender="dog",  # Use "dog" for UI compatibility
+                text=agentic_response.message,
+                message_type="response",
+                metadata={
+                    "phase": agentic_response.phase.value,
+                    "information_status": agentic_response.information_collected.model_dump(),
+                    "should_transition": agentic_response.should_transition,
+                    "cost_info": agentic_response.cost_info
+                }
+            )
+            
+            return [message]
+            
+        except Exception as e:
+            logger.error(f"Agentic collection failed: {e}", exc_info=True)
+            
+            # Return error message
+            error_message = V2AgentMessage(
+                sender="dog",  # Use "dog" for UI compatibility
+                text="*nachdenklich* Entschuldige, könntest du das nochmal sagen?",
+                message_type="error"
+            )
+            
+            return [error_message]
+    
+    async def handle_perspective_generation(
+        self,
+        session: SessionState,
+        user_input: str,
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Handle dog perspective generation after information collection.
+        """
+        logger.info(f"Generating perspective for session {session.session_id[:8]}...")
+        
+        try:
+            # Create context for agentic dog agent
+            agent_context = AgentContext(
+                session_id=session.session_id,
+                user_input="",  # No user input for perspective generation
+                message_type=MessageType.RESPONSE,
+                metadata={}
+            )
+            
+            # Generate perspective with agentic dog agent
+            agentic_response = await self.agentic_dog_agent.respond(agent_context)
+            
+            # Convert to V2AgentMessage format
+            message = V2AgentMessage(
+                sender="dog",  # Use "dog" for UI compatibility
+                text=agentic_response.message,
+                message_type="response",
+                metadata={
+                    "phase": agentic_response.phase.value,
+                    "tool_results": [result.dict() for result in agentic_response.tool_results],
+                    "cost_info": agentic_response.cost_info
+                }
+            )
+            
+            return [message]
+            
+        except Exception as e:
+            logger.error(f"Perspective generation failed: {e}", exc_info=True)
+            
+            # Return error message
+            error_message = V2AgentMessage(
+                sender="dog",  # Use "dog" for UI compatibility
+                text="*nachdenklich* Lass mich einen Moment überlegen...",
+                message_type="error"
+            )
+            
+            return [error_message]
+    
+    async def handle_handoff_question(
+        self,
+        session: SessionState,
+        user_input: str,
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Handle asking the handoff question.
+        """
+        logger.info(f"Asking handoff question for session {session.session_id[:8]}...")
+        
+        try:
+            # Create context for agentic dog agent
+            agent_context = AgentContext(
+                session_id=session.session_id,
+                user_input="",  # No user input for handoff question
+                message_type=MessageType.QUESTION,
+                metadata={}
+            )
+            
+            # Get handoff question from agentic dog agent
+            agentic_response = await self.agentic_dog_agent.respond(agent_context)
+            
+            # Convert to V2AgentMessage format
+            message = V2AgentMessage(
+                sender="dog",  # Use "dog" for UI compatibility
+                text=agentic_response.message,
+                message_type="question",
+                metadata={
+                    "phase": agentic_response.phase.value,
+                    "awaiting_handoff_decision": True
+                }
+            )
+            
+            return [message]
+            
+        except Exception as e:
+            logger.error(f"Handoff question failed: {e}", exc_info=True)
+            
+            # Fallback handoff question
+            fallback_message = V2AgentMessage(
+                sender="dog",  # Use "dog" for UI compatibility
+                text="*hoffnungsvoll* Möchtest du mehr über das Verhalten deines Hundes erfahren?",
+                message_type="question"
+            )
+            
+            return [fallback_message]
+    
+    async def handle_handoff_accepted(
+        self,
+        session: SessionState,
+        user_input: str,
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Handle user accepting handoff to static flow.
+        """
+        logger.info(f"Handoff accepted for session {session.session_id[:8]}, transitioning to static flow...")
+        
+        # Transition message
+        message = V2AgentMessage(
+            sender="agentic_dog",
+            text="*schwanzwedel* Wunderbar! Dann schauen wir uns das genauer an...",
+            message_type="response",
+            metadata={
+                "transition_to_static": True,
+                "next_step": "WAIT_FOR_SYMPTOM"
+            }
+        )
+        
+        return [message]
+    
+    async def handle_handoff_declined(
+        self,
+        session: SessionState,
+        user_input: str,
+        context: Dict[str, Any]
+    ) -> List[V2AgentMessage]:
+        """
+        Handle user declining handoff - end gracefully.
+        """
+        logger.info(f"Handoff declined for session {session.session_id[:8]}, ending session...")
+        
+        # Goodbye message
+        message = V2AgentMessage(
+            sender="agentic_dog",
+            text="*verständnisvoll* Das ist völlig in Ordnung. Falls du später Fragen hast, bin ich da!",
+            message_type="response",
+            metadata={
+                "session_ended": True
+            }
+        )
+        
+        return [message]

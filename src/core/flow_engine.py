@@ -49,6 +49,13 @@ class FlowEvent(str, Enum):
     # Flow control
     START_SESSION = "start_session"
     CONTINUE_FLOW = "continue_flow"
+    
+    # Agentic flow events
+    AGENTIC_USER_INPUT = "agentic_user_input"
+    INFORMATION_COLLECTED = "information_collected"
+    PERSPECTIVE_GENERATED = "perspective_generated"
+    HANDOFF_ACCEPTED = "handoff_accepted"
+    HANDOFF_DECLINED = "handoff_declined"
 
 
 @dataclass
@@ -109,9 +116,58 @@ class FlowEngine:
         self.add_transition(
             from_state=FlowStep.GREETING,
             event=FlowEvent.START_SESSION,
+            to_state=FlowStep.AGENTIC_COLLECTION,
+            handler=self.handlers.handle_greeting_to_agentic,
+            description="Initial greeting -> start agentic information collection"
+        )
+        
+        # ===========================================
+        # AGENTIC FLOW TRANSITIONS
+        # ===========================================
+        
+        # Information collection phase
+        self.add_transition(
+            from_state=FlowStep.AGENTIC_COLLECTION,
+            event=FlowEvent.AGENTIC_USER_INPUT,
+            to_state=FlowStep.AGENTIC_COLLECTION,  # Stay in collection or move to perspective
+            handler=self.handlers.handle_agentic_collection,
+            description="Process user input during agentic information collection"
+        )
+        
+        # Dog perspective generation
+        self.add_transition(
+            from_state=FlowStep.AGENTIC_COLLECTION,
+            event=FlowEvent.INFORMATION_COLLECTED,
+            to_state=FlowStep.DOG_PERSPECTIVE,
+            handler=self.handlers.handle_perspective_generation,
+            description="Generate dog perspective after all information collected"
+        )
+        
+        # Handoff decision
+        self.add_transition(
+            from_state=FlowStep.DOG_PERSPECTIVE,
+            event=FlowEvent.PERSPECTIVE_GENERATED,
+            to_state=FlowStep.HANDOFF_DECISION,
+            handler=self.handlers.handle_handoff_question,
+            description="Ask user if they want to continue to full flow"
+        )
+        
+        # Handoff accepted - transition to static flow
+        self.add_transition(
+            from_state=FlowStep.HANDOFF_DECISION,
+            event=FlowEvent.HANDOFF_ACCEPTED,
             to_state=FlowStep.WAIT_FOR_SYMPTOM,
-            handler=self.handlers.handle_greeting,
-            description="Initial greeting -> wait for symptom description"
+            handler=self.handlers.handle_handoff_accepted,
+            description="User wants to continue - transition to static flow"
+        )
+        
+        # Handoff declined - end session
+        self.add_transition(
+            from_state=FlowStep.HANDOFF_DECISION,
+            event=FlowEvent.HANDOFF_DECLINED,
+            to_state=FlowStep.END_OR_RESTART,
+            handler=self.handlers.handle_handoff_declined,
+            description="User doesn't want to continue - end gracefully"
         )
         
         # ===========================================
@@ -607,7 +663,21 @@ class FlowEngine:
             return FlowEvent.RESTART_COMMAND
         
         # State-specific classification
-        if current_state == FlowStep.WAIT_FOR_SYMPTOM:
+        
+        # Agentic flow states
+        if current_state == FlowStep.AGENTIC_COLLECTION:
+            return FlowEvent.AGENTIC_USER_INPUT
+        elif current_state == FlowStep.HANDOFF_DECISION:
+            # Check for yes/no responses for handoff decision
+            if any(word in user_input for word in ["ja", "yes", "gerne", "weiter", "mehr"]):
+                return FlowEvent.HANDOFF_ACCEPTED
+            elif any(word in user_input for word in ["nein", "no", "nicht", "später"]):
+                return FlowEvent.HANDOFF_DECLINED
+            else:
+                return FlowEvent.AGENTIC_USER_INPUT  # Let agent handle unclear responses
+        
+        # Regular flow states
+        elif current_state == FlowStep.WAIT_FOR_SYMPTOM:
             return FlowEvent.USER_INPUT
         
         elif current_state == FlowStep.WAIT_FOR_CONFIRMATION:
