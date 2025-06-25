@@ -15,7 +15,7 @@ from src.models.flow_models import FlowStep
 from src.models.session_state import SessionState
 from src.agents.base_agent import V2AgentMessage
 from src.core.exceptions import V2FlowError, V2ValidationError
-from src.core.flow_handlers import FlowHandlers
+from src.core.enhanced_flow_handlers import EnhancedFlowHandlers
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class FlowEngine:
     4. Coordinates V2 agents and services
     """
     
-    def __init__(self, flow_handlers: Optional[FlowHandlers] = None):
+    def __init__(self, flow_handlers: Optional[EnhancedFlowHandlers] = None):
         """
         Initialize flow engine with handlers.
         
@@ -90,7 +90,7 @@ class FlowEngine:
         self.logger = logging.getLogger(__name__)
         
         # Initialize handlers
-        self.handlers = flow_handlers or FlowHandlers()
+        self.handlers = flow_handlers or EnhancedFlowHandlers()
         
         # Store all defined transitions
         self.transitions: List[Transition] = []
@@ -622,6 +622,39 @@ class FlowEngine:
                 # Stay in same state, don't transition
                 self.logger.info(f"Staying in current state: {current_state.value}")
                 return current_state, messages
+            elif next_event in ['information_collected', 'perspective_generated', 'handoff_accepted']:
+                # Agentic agent phase transitions - trigger additional FSM event
+                from src.models.flow_models import FlowStep
+                if next_event == 'information_collected':
+                    self.logger.info("Processing INFORMATION_COLLECTED - moving to DOG_PERSPECTIVE")
+                    session.current_step = FlowStep.DOG_PERSPECTIVE
+                    # Generate dog perspective
+                    perspective_messages = await self.handlers.handle_perspective_generation(session, "", context)
+                    messages.extend(perspective_messages)
+                    
+                    # Check if perspective generation triggered next event
+                    if context.get('next_event') == 'perspective_generated':
+                        self.logger.info("Chaining PERSPECTIVE_GENERATED - moving to HANDOFF_DECISION")
+                        session.current_step = FlowStep.HANDOFF_DECISION
+                        # DON'T generate handoff question here - enhanced agent already included it
+                        self.logger.info("Skipping handoff question generation - already included in perspective message")
+                        return FlowStep.HANDOFF_DECISION, messages
+                    
+                    return FlowStep.DOG_PERSPECTIVE, messages
+                elif next_event == 'perspective_generated':
+                    self.logger.info("Processing PERSPECTIVE_GENERATED - moving to HANDOFF_DECISION")
+                    session.current_step = FlowStep.HANDOFF_DECISION
+                    # Check if messages already contain perspective + handoff question
+                    if messages and any('Möchtest du' in msg.text or 'mehr' in msg.text.lower() for msg in messages):
+                        self.logger.info("Handoff question already included in messages - skipping duplicate")
+                        return FlowStep.HANDOFF_DECISION, messages
+                    # Generate handoff question only if not already present
+                    handoff_messages = await self.handlers.handle_handoff_question(session, "", context)
+                    messages.extend(handoff_messages)
+                    return FlowStep.HANDOFF_DECISION, messages
+                elif next_event == 'handoff_accepted':
+                    self.logger.info("Processing HANDOFF_ACCEPTED - normal transition handling")
+                    # Let normal transition handling take care of this
             
             # Update session state
             old_state = session.current_step

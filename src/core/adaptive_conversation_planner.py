@@ -190,19 +190,16 @@ class AdaptiveConversationPlanner:
             response = await self.gpt.complete(
                 prompt=prompt,
                 model="gpt-4o-mini",
-                max_tokens=100,
-                temperature=0.8  # Higher for more variety
+                max_tokens=400,  # Allow for natural, empathetic responses
+                temperature=0.85  # Natural but consistent
             )
             
             # Track usage
-            state.track_llm_usage(tokens=100)
+            state.track_llm_usage(tokens=400)
             
             question = response.strip()
             
-            # Ensure it ends with a question mark
-            if question and not question.endswith('?'):
-                question += '?'
-            
+            # Allow natural responses - don't force question marks
             return question
             
         except Exception as e:
@@ -240,11 +237,15 @@ Deine Aufgabe: Frage natürlich nach {field_desc}.
 
 Wichtige Regeln:
 - Nutze Hundeaktionen in *Sternchen* (z.B. *schwanzwedel*, *neugierig-schnüffel*)
-- Sei warmherzig und empathisch
-- Maximal 1-2 Sätze
-- Verwende bereits bekannte Namen
+- Sei warmherzig und empathisch  
+- Führe eine natürliche, empathische Unterhaltung. Zeige Verständnis, stelle Rückfragen wo nötig, und baue auf dem auf, was der Nutzer gesagt hat.
+- ERST reagiere auf das Gesagte, DANN leite natürlich zur fehlenden Info über
+- Zeige echtes Interesse und Verständnis für die Situation
+- Verwende bereits bekannte Namen natürlich im Gespräch
 - Baue auf dem Gesprächsverlauf auf
-- Vermeide Wiederholungen von bereits gestellten Fragen
+- Stelle Fragen beiläufig, nicht wie in einem Interview
+- Du kannst sowohl Aussagen als auch Fragen machen - folge dem natürlichen Gesprächsfluss
+- Beispiel: "*verständnisvoll* Das klingt wirklich herausfordernd! Gerade bei längeren Spaziergängen kann das anstrengend werden. Wie heißt denn dein Vierbeiner?"
 
 """
 
@@ -284,11 +285,11 @@ Deine Nachfrage:"""
             response = await self.gpt.complete(
                 prompt=prompt,
                 model="gpt-4o-mini",
-                max_tokens=80,
+                max_tokens=150,  # Allow for more natural clarifications
                 temperature=0.7
             )
             
-            state.track_llm_usage(tokens=80)
+            state.track_llm_usage(tokens=150)
             
             return ActionPlan(
                 next_question=response.strip(),
@@ -380,21 +381,21 @@ Deine Nachfrage:"""
         prompt = f"""Du bist Balu. Du hast gerade etwas Neues über den Hund erfahren:
 {', '.join(ack_parts)}
 
-Zeige KURZ (max 5 Wörter!), dass du es verstanden hast.
-Nutze eine *Hundeaktion*.
+Zeige authentisch, dass du verstanden hast - wie es zur Situation passt.
+Nutze eine *Hundeaktion* und reagiere natürlich.
 
 Beispiele:
 - "*aufmerksam-nick* Ah, {extracted_info.get('dog_name', 'verstehe')}!"
-- "*verstehend* Ein {extracted_info.get('dog_breed', 'toller Hund')}!"
-- "*mitfühlend-blick*"
+- "*verstehend* Ein {extracted_info.get('dog_breed', 'toller Hund')} - die sind oft so!"
+- "*mitfühlend* Das klingt wirklich herausfordernd."
 
-Deine kurze Reaktion:"""
+Deine natürliche Reaktion:"""
         
         try:
             response = await self.gpt.complete(
                 prompt=prompt,
                 model="gpt-4o-mini",
-                max_tokens=20,
+                max_tokens=50,  # Allow for natural acknowledgments
                 temperature=0.9
             )
             
@@ -403,3 +404,19 @@ Deine kurze Reaktion:"""
         except Exception:
             # Skip acknowledgment on error
             return None
+    
+    def _plan_handoff_question(self, state: UnifiedConversationState) -> ActionPlan:
+        """Generate the handoff question for transitioning to static flow"""
+        
+        # Use consistent handoff question
+        question = "*schwanzwedel* Möchtest du mehr darüber erfahren, warum {} das macht und wie ihr gemeinsam daran arbeiten könnt?".format(
+            state.dog_name or "dein Hund"
+        )
+        
+        return ActionPlan(
+            next_question=question,
+            information_needed="handoff_decision",
+            confidence=1.0,  # High confidence - all required information collected
+            should_handoff=True,
+            reasoning="All information collected, offering detailed analysis"
+        )
