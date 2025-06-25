@@ -159,7 +159,7 @@ Generiere eine warmherzige Begrüßung, die:
 
 Stil:
 - Verwende *Hundeaktionen* in Sternchen
-- Maximal 2 Sätze
+- 2-3 Sätze für eine warme, einladende Begrüßung
 - Warm und einladend
 - Authentisch hundlich
 
@@ -171,7 +171,7 @@ Deine Begrüßung:"""
             response = await self.gpt_service.complete(
                 prompt=greeting_prompt,
                 model="gpt-4o-mini",
-                max_tokens=80,
+                max_tokens=120,  # Allow for warmer greetings
                 temperature=0.8
             )
             return response.strip()
@@ -250,9 +250,15 @@ Deine Begrüßung:"""
             state.perspective_generated = True
             state.current_phase = ConversationPhase.HANDOFF
             
+            # Generate handoff question
+            action_plan = self.conversation_planner._plan_handoff_question(state)
+            
+            # Combine perspective with handoff question
+            combined_message = f"{perspective_result.result}\n\n{action_plan.next_question}"
+            
             return AgenticResponse(
-                message=perspective_result.result,
-                phase=ConversationPhase.PERSPECTIVE,
+                message=combined_message,
+                phase=ConversationPhase.HANDOFF,
                 information_collected=self._convert_to_information_status(state),
                 should_transition=False,
                 tool_results=[perspective_result],

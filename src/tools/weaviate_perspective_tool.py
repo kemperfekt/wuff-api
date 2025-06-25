@@ -40,6 +40,14 @@ class WeaviatePerspectiveTool(BaseTool):
             Balu's perspective as a string
         """
         try:
+            # Debug logging to catch potential name confusion
+            self.logger.info(f"Generating perspective for dog_name='{dog_name}', dog_breed='{dog_breed}', symptom='{symptom}', user_name='{user_name}'")
+            
+            # Validation to prevent agent name confusion
+            if dog_name and dog_name.lower() == 'balu':
+                self.logger.warning(f"WARNING: dog_name is 'Balu' (agent name) - this might be incorrect data!")
+                self.logger.warning(f"Context: user_name='{user_name}', symptom='{symptom}'")
+            
             # 1. Get symptom information from Weaviate
             symptom_data = await self._get_symptom_context(symptom)
             
@@ -204,9 +212,10 @@ Deine Aufgabe: Erkläre aus authentischer Hundesicht, warum {dog_name} dieses Ve
 - Zeige, dass {dog_name}s Verhalten aus Hundesicht völlig logisch ist
 - Verwende "wir Hunde" um Verbindung zu schaffen
 - Bleibe bei maximal 2-3 Sätzen
-- Nutze {dog_name}s Namen persönlich
+- Sprich ZU dem Hundebesitzer ÜBER {dog_name} (nicht zu {dog_name} direkt)
+- Verwende "du" für den Hundebesitzer und erwähne {dog_name} in der dritten Person
 
-Beispiel-Ton: "*verständnisvoll* Ach, das kenne ich... Für uns Hunde ist das..."
+Beispiel-Ton: "*verständnisvoll* Ach, das kenne ich... Für uns Hunde ist das..." oder "*nachdenklich* Das kann ich gut verstehen... Wenn {dog_name} das macht..."
 
 Deine Perspektive zu {dog_name}s Verhalten:"""
 

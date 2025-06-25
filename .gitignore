@@ -36,3 +36,5 @@ generation_prompts_old.py
 # Architecture documentation (excluded)
 AGENTIC_HANDOFF.md
 MIGRATION_GUIDE.md
+ENHANCED_ARCHITECTURE_FLAG.md
+HANDOFF_FIX_SUMMARY.md

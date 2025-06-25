@@ -212,13 +212,29 @@ class TestInformationExtractor:
         assert result["main_concern"] == "jumps on visitors"
         assert result["confidence"]["dog_name"] == 0.95
     
-    def test_breed_normalization(self, extractor):
-        """Test breed name normalization"""
-        # Test common variations
-        assert extractor._normalize_breed("golden") == "Golden Retriever"
-        assert extractor._normalize_breed("lab") == "Labrador"
-        assert extractor._normalize_breed("German Shepherd Dog") == "German Shepherd Dog"
-        assert extractor._normalize_breed("unknown breed") is None
+    @pytest.mark.asyncio
+    async def test_breed_normalization(self, extractor):
+        """Test breed name normalization using LLM+Weaviate architecture"""
+        # Test that the method returns reasonable results
+        # (Exact results depend on LLM response and Weaviate data)
+        
+        # Test that it returns a string for valid inputs
+        result = await extractor._normalize_breed("golden retriever")
+        assert isinstance(result, str)
+        assert len(result) > 0
+        
+        result = await extractor._normalize_breed("mix")
+        assert isinstance(result, str)
+        assert len(result) > 0
+        
+        # Test empty/invalid inputs
+        assert await extractor._normalize_breed("") is None
+        assert await extractor._normalize_breed("x") is None
+        
+        # Test that it handles reasonable breed input
+        result = await extractor._normalize_breed("labrador")
+        assert isinstance(result, str)
+        assert len(result) > 1
 
 
 class TestAdaptiveConversationPlanner:
