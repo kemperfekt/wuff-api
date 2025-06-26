@@ -152,13 +152,13 @@ class FlowEngine:
             description="Ask user if they want to continue to full flow"
         )
         
-        # Handoff accepted - transition to static flow
+        # Handoff accepted - continue with pure agentic flow
         self.add_transition(
             from_state=FlowStep.HANDOFF_DECISION,
             event=FlowEvent.HANDOFF_ACCEPTED,
-            to_state=FlowStep.WAIT_FOR_SYMPTOM,
-            handler=self.handlers.handle_handoff_accepted,
-            description="User wants to continue - transition to static flow"
+            to_state=FlowStep.AGENTIC_COLLECTION,
+            handler=self.handlers.handle_enhanced_agentic_collection,
+            description="User wants to continue - stay in agentic flow for instinct analysis"
         )
         
         # Handoff declined - end session
@@ -624,7 +624,6 @@ class FlowEngine:
                 return current_state, messages
             elif next_event in ['information_collected', 'perspective_generated', 'handoff_accepted']:
                 # Agentic agent phase transitions - trigger additional FSM event
-                from src.models.flow_models import FlowStep
                 if next_event == 'information_collected':
                     self.logger.info("Processing INFORMATION_COLLECTED - moving to DOG_PERSPECTIVE")
                     session.current_step = FlowStep.DOG_PERSPECTIVE
