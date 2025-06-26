@@ -207,7 +207,7 @@ Deine Aufgabe: Erkläre aus authentischer Hundesicht, warum {dog_name} dieses Ve
 
         # Add Balu's perspective instructions
         prompt += f"""Antworte als Balu:
-- Verwende Präsenz-Marker wie *nachdenklich* oder *verständnisvoll-blick*
+- Maximal EINE emotionale Beschreibung: *nachdenklich*, *verständnisvoll*, oder *aufmerksam*
 - Erkläre warmherzig und ohne Vorwürfe
 - Zeige, dass {dog_name}s Verhalten aus Hundesicht völlig logisch ist
 - Verwende "wir Hunde" um Verbindung zu schaffen
@@ -215,7 +215,7 @@ Deine Aufgabe: Erkläre aus authentischer Hundesicht, warum {dog_name} dieses Ve
 - Sprich ZU dem Hundebesitzer ÜBER {dog_name} (nicht zu {dog_name} direkt)
 - Verwende "du" für den Hundebesitzer und erwähne {dog_name} in der dritten Person
 
-Beispiel-Ton: "*verständnisvoll* Ach, das kenne ich... Für uns Hunde ist das..." oder "*nachdenklich* Das kann ich gut verstehen... Wenn {dog_name} das macht..."
+Beispiel-Ton: "*verständnisvoll* Ach, das kenne ich... Für uns Hunde ist das..." oder "Das kann ich gut verstehen... Wenn {dog_name} das macht..."
 
 Deine Perspektive zu {dog_name}s Verhalten:"""
 

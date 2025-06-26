@@ -83,6 +83,10 @@ class EnhancedAgenticDogAgent(BaseAgent):
                 return await self._handle_perspective_phase(state, context)
             elif state.current_phase == ConversationPhase.HANDOFF:
                 return await self._handle_handoff_phase(state, context)
+            elif state.current_phase == ConversationPhase.INSTINCT_ANALYSIS:
+                return await self._handle_instinct_analysis_phase(state, context)
+            elif state.current_phase == ConversationPhase.EXERCISE_OFFER:
+                return await self._handle_exercise_offer_phase(state, context)
             else:
                 return self._create_completion_response(state)
                 
@@ -158,12 +162,12 @@ Generiere eine warmherzige Begrüßung, die:
 3. Offen nach dem Problem fragt
 
 Stil:
-- Verwende *Hundeaktionen* in Sternchen
+- Maximal EINE emotionale Beschreibung am Anfang: *neugierig*, *aufmerksam*, *interessiert*
+- Keine Lautäußerungen wie "Wuff" oder ähnliches
 - 2-3 Sätze für eine warme, einladende Begrüßung
-- Warm und einladend
-- Authentisch hundlich
+- Authentisch und zurückhaltend
 
-Beispiel: "*schwanzwedel* Hallo! Ich bin Balu und helfe dir gerne zu verstehen, warum wir Hunde manchmal so seltsam sind. Was beschäftigt dich denn mit deinem Vierbeiner?"
+Beispiel: "*aufmerksam* Hallo! Ich bin Balu und helfe dir gerne zu verstehen, warum wir Hunde manchmal so handeln. Was beschäftigt dich denn mit deinem Vierbeiner?"
 
 Deine Begrüßung:"""
         
@@ -216,10 +220,61 @@ Deine Begrüßung:"""
             extracted_info=extracted_info
         )
         
-        # Check if ready for perspective
-        if state.is_ready_for_perspective() and not state.perspective_generated:
-            state.current_phase = ConversationPhase.PERSPECTIVE
-            return await self._handle_perspective_phase(state, context)
+        # Check if ready for perspective - merge collection + perspective
+        if state.is_ready_for_perspective() and not state.perspective_generated and state.main_concern:
+            # Generate perspective immediately after symptom extraction
+            try:
+                perspective_result = await self.perspective_tool.execute(
+                    symptom=state.main_concern,
+                    dog_name=state.dog_name,
+                    dog_breed=state.dog_breed,
+                    user_name=state.user_name
+                )
+                
+                if perspective_result.success:
+                    state.dog_perspective = perspective_result.result
+                    state.perspective_generated = True
+                    
+                    # Combine acknowledgment with perspective and ask if they want to know more
+                    handoff_question = f"Möchtest du mehr darüber erfahren, warum {state.dog_name or 'dein Hund'} das macht?"
+                    combined_message = f"{agent_response}\n\n{perspective_result.result}\n\n{handoff_question}"
+                    
+                    state.current_phase = ConversationPhase.HANDOFF
+                    
+                    return AgenticResponse(
+                        message=combined_message,
+                        phase=ConversationPhase.HANDOFF,
+                        information_collected=self._convert_to_information_status(state),
+                        should_transition=False,
+                        tool_results=[perspective_result],
+                        cost_info=self._get_cost_info(state)
+                    )
+                else:
+                    # Perspective tool failed but returned structured error
+                    self.logger.warning(f"Perspective tool failed: {perspective_result.error}")
+                    # Continue with fallback below
+                    
+            except Exception as e:
+                # Perspective tool had unhandled exception (e.g., Weaviate down)
+                self.logger.error(f"Perspective tool exception: {e}")
+                # Continue with fallback below
+            
+            # Fallback: Generate simple perspective without Weaviate
+            fallback_perspective = f"Das Verhalten von {state.dog_name or 'deinem Hund'} ist sehr typisch für uns Hunde. Es gibt meist gute Gründe dafür, auch wenn Menschen sie nicht sofort verstehen."
+            handoff_question = f"Möchtest du mehr darüber erfahren, warum {state.dog_name or 'dein Hund'} das macht?"
+            combined_message = f"{agent_response}\n\n{fallback_perspective}\n\n{handoff_question}"
+            
+            state.dog_perspective = fallback_perspective
+            state.perspective_generated = True
+            state.current_phase = ConversationPhase.HANDOFF
+            
+            return AgenticResponse(
+                message=combined_message,
+                phase=ConversationPhase.HANDOFF,
+                information_collected=self._convert_to_information_status(state),
+                should_transition=False,
+                cost_info=self._get_cost_info(state)
+            )
         
         return AgenticResponse(
             message=agent_response,
@@ -280,22 +335,23 @@ Deine Begrüßung:"""
         state: UnifiedConversationState,
         context: AgentContext
     ) -> AgenticResponse:
-        """Handle handoff decision phase"""
+        """Handle handoff decision phase - now leads to instinct analysis"""
         
         user_input = context.user_input.lower()
         
-        # Check for handoff decision
+        # Check for positive response
         if any(word in user_input for word in ["ja", "yes", "gerne", "weiter", "mehr"]):
-            # User wants to continue
-            state.handoff_ready = True
-            state.current_phase = ConversationPhase.COMPLETED
+            # User wants to continue - move to instinct analysis
+            state.current_phase = ConversationPhase.INSTINCT_ANALYSIS
+            
+            # Generate context-gathering question
+            context_question = "Gut, dann brauche ich noch ein paar Informationen. Wie kam es zu der Situation? Wer war dabei und wo ist es passiert?"
             
             return AgenticResponse(
-                message="*schwanzwedel* Wunderbar! Dann schauen wir uns das genauer an...",
-                phase=ConversationPhase.COMPLETED,
+                message=context_question,
+                phase=ConversationPhase.INSTINCT_ANALYSIS,
                 information_collected=self._convert_to_information_status(state),
-                should_transition=True,
-                next_flow_step="WAIT_FOR_SYMPTOM",
+                should_transition=False,
                 cost_info=self._get_cost_info(state)
             )
         
@@ -385,6 +441,122 @@ Deine Begrüßung:"""
             "tokens_used": state.total_tokens_used,
             "estimated_cost_euros": state.get_cost_estimate()
         }
+    
+    async def _handle_instinct_analysis_phase(
+        self,
+        state: UnifiedConversationState,
+        context: AgentContext
+    ) -> AgenticResponse:
+        """Handle instinct analysis phase - analyze context and provide diagnosis"""
+        
+        # Import the flow handlers to access existing analysis logic
+        from src.core.enhanced_flow_handlers import EnhancedFlowHandlers
+        from src.core.prompt_manager import PromptType
+        
+        # Create temporary handlers instance to use existing methods
+        handlers = EnhancedFlowHandlers(
+            gpt_service=self.gpt_service,
+            weaviate_service=self.weaviate_service,
+            prompt_manager=self.prompt_manager
+        )
+        
+        # Analyze instincts using existing logic
+        analysis_data = await handlers._analyze_instincts(
+            state.main_concern,
+            context.user_input  # This is the context info
+        )
+        
+        # Generate diagnosis using the dog agent format
+        diagnosis_prompt = self.prompt_manager.get_prompt(
+            PromptType.DOG_INSTINCT_DIAGNOSIS,
+            symptom=state.main_concern,
+            context=context.user_input,
+            jagd=analysis_data['all_instincts'].get('jagd', ''),
+            rudel=analysis_data['all_instincts'].get('rudel', ''),
+            territorial=analysis_data['all_instincts'].get('territorial', ''),
+            sexual=analysis_data['all_instincts'].get('sexual', '')
+        )
+        
+        diagnosis = await self.gpt_service.complete(
+            prompt=diagnosis_prompt,
+            system_prompt=self.prompt_manager.get_prompt(PromptType.BALU_AGENT_SYSTEM),
+            max_tokens=400
+        )
+        
+        # Ask if they want an exercise
+        exercise_question = f"\n\nMöchtest du eine Anleitung, wie du mit {state.dog_name or 'deinem Hund'} üben kannst, dass sich das verbessert?"
+        
+        state.current_phase = ConversationPhase.EXERCISE_OFFER
+        state.instinct_analysis = analysis_data
+        
+        return AgenticResponse(
+            message=diagnosis + exercise_question,
+            phase=ConversationPhase.EXERCISE_OFFER,
+            information_collected=self._convert_to_information_status(state),
+            should_transition=False,
+            metadata={"instinct_analysis": analysis_data},
+            cost_info=self._get_cost_info(state)
+        )
+    
+    async def _handle_exercise_offer_phase(
+        self,
+        state: UnifiedConversationState,
+        context: AgentContext
+    ) -> AgenticResponse:
+        """Handle exercise offer - provide training plan if requested"""
+        
+        user_input = context.user_input.lower()
+        
+        if any(word in user_input for word in ["ja", "yes", "gerne", "bitte"]):
+            # User wants exercise - use existing logic
+            from src.core.enhanced_flow_handlers import EnhancedFlowHandlers
+            from src.core.prompt_manager import PromptType
+            
+            handlers = EnhancedFlowHandlers(
+                gpt_service=self.gpt_service,
+                weaviate_service=self.weaviate_service,
+                prompt_manager=self.prompt_manager
+            )
+            
+            # Find exercise using existing method
+            exercise_text = await handlers._find_exercise(state.main_concern)
+            
+            # Format from dog perspective
+            exercise_prompt = self.prompt_manager.get_prompt(
+                PromptType.EXERCISE_TEMPLATE,
+                symptom=state.main_concern,
+                exercise_content=exercise_text
+            )
+            
+            exercise_response = await self.gpt_service.complete(
+                prompt=exercise_prompt,
+                system_prompt=self.prompt_manager.get_prompt(PromptType.EXERCISE_SYSTEM),
+                max_tokens=300
+            )
+            
+            # Mark as completed
+            state.current_phase = ConversationPhase.COMPLETED
+            
+            completion_msg = f"{exercise_response}\n\n*zufrieden* Das war's für heute! Viel Erfolg beim Üben!"
+            
+            return AgenticResponse(
+                message=completion_msg,
+                phase=ConversationPhase.COMPLETED,
+                information_collected=self._convert_to_information_status(state),
+                should_transition=False,
+                cost_info=self._get_cost_info(state)
+            )
+        else:
+            # User doesn't want exercise
+            state.current_phase = ConversationPhase.COMPLETED
+            
+            return AgenticResponse(
+                message="*verständnisvoll* Kein Problem! Ich hoffe, ich konnte dir trotzdem helfen. *schwanzwedel*",
+                phase=ConversationPhase.COMPLETED,
+                information_collected=self._convert_to_information_status(state),
+                should_transition=False,
+                cost_info=self._get_cost_info(state)
+            )
     
     def get_supported_message_types(self):
         """Return supported message types"""

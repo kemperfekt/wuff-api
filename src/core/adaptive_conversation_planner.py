@@ -381,15 +381,14 @@ Deine Nachfrage:"""
         prompt = f"""Du bist Balu. Du hast gerade etwas Neues über den Hund erfahren:
 {', '.join(ack_parts)}
 
-Zeige authentisch, dass du verstanden hast - wie es zur Situation passt.
-Nutze eine *Hundeaktion* und reagiere natürlich.
+Zeige kurz, dass du verstanden hast. Verwende maximal eine einfache Emotion.
 
 Beispiele:
-- "*aufmerksam-nick* Ah, {extracted_info.get('dog_name', 'verstehe')}!"
-- "*verstehend* Ein {extracted_info.get('dog_breed', 'toller Hund')} - die sind oft so!"
-- "*mitfühlend* Das klingt wirklich herausfordernd."
+- "*aufmerksam* Ah, {extracted_info.get('dog_name', 'verstehe')}!"
+- "Ein {extracted_info.get('dog_breed', 'toller Hund')} - die sind oft so!"
+- "Das klingt herausfordernd."
 
-Deine natürliche Reaktion:"""
+Deine kurze Reaktion:"""
         
         try:
             response = await self.gpt.complete(
