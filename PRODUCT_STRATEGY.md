@@ -29,6 +29,34 @@ WuffChat transforms how dog owners understand and connect with their dogs throug
 - Get actionable training that actually works
 - Build deeper connection with their dog
 
+## Core Conversation Flow (Refined)
+
+### 1. GREETING
+- Warm, personality-driven welcome by Balu
+- Establish conversational tone
+- Future: Rapport building techniques
+
+### 2. INFORMATION_GATHERING + PERSPECTIVE (Merged)
+- Agentic extraction of key information (name, breed, symptom)
+- Immediate dog perspective on identified symptom
+- Natural flow allowing multiple symptoms if mentioned
+- Consent point: "Want to understand why?"
+
+### 3. INSTINCT_ANALYSIS
+- Agentic context gathering (situation, triggers)
+- Identify driving instinct(s) behind behavior
+- Natural explanation from dog's perspective
+- Consent point: "Want a training plan?"
+
+### 4. EXERCISE_DELIVERY
+- Retrieve instinct-matched exercise from Weaviate
+- Explain from dog's perspective why it helps
+- Practical implementation guidance
+
+### 5. FEEDBACK (Optional)
+- Gather user satisfaction data
+- Build for future improvements
+
 ### Learning Objectives
 1. **Leichtigkeit und Zuversicht** (Ease and Confidence)
 2. **Vertrauen & Überwindung** (Trust and Overcoming Resistance)
