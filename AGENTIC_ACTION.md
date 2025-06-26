@@ -1,5 +1,21 @@
 # AGENTIC_ACTION.md - Implementation Status & Next Steps
 
+**Last Updated:** June 26, 2025
+
+## Refined Implementation Plan
+
+### Core Flow (Simplified)
+1. **GREETING** - Personality-driven welcome
+2. **GATHER_AND_PERSPECTIVE** - Extract info + immediate dog perspective (merged)
+3. **INSTINCT_ANALYSIS** - Context gathering + root cause identification
+4. **EXERCISE_DELIVERY** - Instinct-matched training plan
+5. **FEEDBACK** - Optional satisfaction gathering
+
+### Postponed to Phase 2
+- Session memory and continuity
+- User/dog profiles persistence
+- Progress tracking
+
 ## Current System Status
 
 ### ✅ What's Already Implemented
@@ -49,6 +65,28 @@
    - Enhanced agent maintains own state dictionary
    - Session state managed separately
    - Potential for synchronization issues
+
+## Required Tools by Flow Stage
+
+### 1. GREETING
+- **Current:** Basic greeting prompts
+- **Needed:** RapportService integration (exists but not used)
+
+### 2. GATHER_AND_PERSPECTIVE (Merged)
+- **Current:** InformationExtractor, WeaviatePerspectiveTool
+- **Needed:** Merge logic to show perspective immediately after symptom extraction
+
+### 3. INSTINCT_ANALYSIS  
+- **Current:** Basic instinct descriptions in Weaviate
+- **Needed:** 
+  - ContextCollector (gather situation details)
+  - InstinctAnalyzer (map behavior + context → instinct)
+  
+### 4. EXERCISE_DELIVERY
+- **Current:** Exercise content in Weaviate
+- **Needed:**
+  - ExerciseMatcher (instinct → appropriate exercise)
+  - ExerciseExplainer (format for dog perspective)
 
 ## Immediate Actions Required
 
