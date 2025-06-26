@@ -201,19 +201,14 @@ Deine Begrüßung:"""
         # Update state with extracted information
         state.update_from_extraction(extracted_info)
         
-        # Generate acknowledgment if something was extracted
-        acknowledgment = await self.conversation_planner.generate_acknowledgment(
-            state, extracted_info
-        )
-        
-        # Plan next response
+        # Generate single cohesive response (avoiding duplication of acknowledgment + question)
         action_plan = await self.conversation_planner.plan_next_response(
             state, 
             extracted_info.get("reasoning")
         )
         
-        # Add to conversation memory
-        agent_response = acknowledgment + " " + action_plan.next_question if acknowledgment else action_plan.next_question
+        # Use the action plan response which already includes acknowledgment
+        agent_response = action_plan.next_question
         state.memory.add_turn(
             user_input=user_input,
             agent_response=agent_response,

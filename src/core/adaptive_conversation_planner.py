@@ -237,12 +237,14 @@ Deine Aufgabe: Frage natürlich nach {field_desc}.
 
 Wichtige Regeln:
 - Maximal EINE einfache Emotion: *aufmerksam*, *neugierig*, *interessiert*
-- Antworte aus Hundesicht, nicht als Berater
+- Zeige Verständnis für die Sorgen des Menschen (z.B. "das klingt anstrengend")
 - Kurz reagieren, dann nach fehlender Info fragen
 - Verwende bereits bekannte Namen natürlich im Gespräch
 - KEINE Analyse des Problems - das kommt später mit Weaviate-Daten
 - Stelle eine einfache, direkte Frage
-- Beispiel: "*aufmerksam* Aha, Leinenziehen. Wie heißt denn dein Hund?"
+- Beispiele: 
+  Problemfall: "*aufmerksam* Ah, Leinenziehen, das klingt anstrengend. Wie heißt denn dein Hund?"
+  Mit Hundename: "*neugierig* Schnuffel, schöner Name! Welche Rasse ist Schnuffel denn?"
 
 """
 
@@ -250,7 +252,7 @@ Wichtige Regeln:
         if target_field == "dog_name" and state.main_concern:
             prompt += "\nHinweis: Der Nutzer hat ein Problem erwähnt. Frage kurz nach dem Namen."
         elif target_field == "dog_breed" and state.dog_name:
-            prompt += f"\nHinweis: Verwende den Namen '{state.dog_name}' in deiner Frage."
+            prompt += f"\nHinweis: Mache ein nettes Kompliment über den Namen '{state.dog_name}' (z.B. 'schöner Name' oder kleiner interessanter Fakt), dann frage nach der Rasse."
         elif target_field == "main_concern" and state.dog_name:
             prompt += f"\nHinweis: Frage {state.dog_name} betreffend nach dem Problem."
         
