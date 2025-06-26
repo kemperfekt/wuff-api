@@ -190,7 +190,6 @@ class EnhancedFlowHandlers:
                 
             elif agentic_response.phase == ConversationPhase.HANDOFF:
                 # Agent generated perspective AND handoff question - transition to handoff decision state
-                from src.models.flow_models import FlowStep
                 logger.info("Agentic agent moved to handoff phase - perspective and handoff question already included, transitioning to HANDOFF_DECISION")
                 # Return tuple to override state transition
                 return (FlowStep.HANDOFF_DECISION, [message])
@@ -1114,5 +1113,14 @@ class EnhancedFlowHandlers:
             metadata={}
         )
         
-        messages = await self.dog_agent.respond(agent_context)
-        return messages
+        try:
+            messages = await self.dog_agent.respond(agent_context)
+            return messages
+        except Exception as e:
+            logger.error(f"Greeting handler failed: {e}")
+            # Return fallback greeting message
+            return [V2AgentMessage(
+                sender="dog",
+                text="*schwanzwedel* Hallo! Schön, dass du da bist. Wie kann ich dir helfen?",
+                message_type="greeting"
+            )]
