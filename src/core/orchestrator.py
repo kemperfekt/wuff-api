@@ -13,7 +13,7 @@ from src.models.flow_models import FlowStep
 from src.models.session_state import SessionState, SessionStore
 from src.agents.base_agent import V2AgentMessage
 from src.core.flow_engine import FlowEngine, FlowEvent, create_flow_engine
-from src.core.flow_handlers import FlowHandlers
+from src.core.enhanced_flow_handlers import EnhancedFlowHandlers
 from src.core.exceptions import V2FlowError, V2ValidationError
 from src.services.gpt_service import GPTService
 from src.services.weaviate_service import WeaviateService  
@@ -91,7 +91,7 @@ class V2Orchestrator:
             self.redis_service = RedisService()
             
             # Initialize handlers with services
-            self.flow_handlers = FlowHandlers(
+            self.flow_handlers = EnhancedFlowHandlers(
                 prompt_manager=self.prompt_manager,
                 gpt_service=self.gpt_service,
                 weaviate_service=self.weaviate_service,

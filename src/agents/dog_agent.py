@@ -55,20 +55,20 @@ class DogAgent(BaseAgent):
             }
             
             self.balu_greetings = [
-                "*(aufmerksam-blick)* Oh, ein Mensch mit Fragen... *(gemütlich-hinleg)* Ich bin Balu. Ich beobachte gerne, wie Menschen und Hunde miteinander umgehen. *(ruhig)* Erzähl mal, was dich zu mir führt?",
+                "*(aufmerksam-blick)* Oh, ein Mensch mit Fragen... Ich bin Balu. Ich beobachte gerne, wie Menschen und Hunde miteinander umgehen. Erzähl mal, was dich zu mir führt?",
                 
-                "*(kopf-heb)* Ah, du bist da. *(schwanzwedel-sanft)* Ich bin Balu, ein Labrador der lieber beobachtet als apportiert. *(schmunzel)* Was ich dabei über Hunde gelernt habe? Eine Menge. Was möchtest du über deinen Hund verstehen?",
+                "*(ruhig)* Ah, du bist da. Ich bin Balu, ein Labrador der lieber beobachtet als apportiert. Was ich dabei über Hunde gelernt habe? Eine Menge. Was möchtest du über deinen Hund verstehen?",
                 
-                "*(tief-atme)* Willkommen. *(ruhiger-blick)* Ich bin Balu. Während andere Labradore jedem Ball hinterherrennen, sitze ich hier und... verstehe. *(aufmerksam)* Menschen, Hunde, ihre Tänze miteinander. Was beschäftigt dich?",
+                "*(nachdenklich)* Willkommen. Ich bin Balu. Während andere Labradore jedem Ball hinterherrennen, sitze ich hier und... verstehe. Menschen, Hunde, ihre Tänze miteinander. Was beschäftigt dich?",
                 
-                "*(beobachte-ruhig)* Hallo... *(nachdenklich)* Ich bin Balu. Als Labrador sehe ich die Welt anders - ruhiger, aufmerksamer. *(verstehend-nick)* Erzähl mir von deinem Fellfreund. Was puzzelt dich?"
+                "*(beobachte-ruhig)* Hallo... Ich bin Balu. Als Labrador sehe ich die Welt anders - ruhiger, aufmerksamer. Erzähl mir von deinem Fellfreund. Was puzzelt dich?"
             ]
             
             self.balu_followups = [
                 "*(neugierig-schnüffel)* Wie heißt denn dein Fellfreund? Ich merke mir gerne Namen... macht alles persönlicher.",
-                "*(aufmerksam)* Erzähl mir von eurem Alltag... was ist da los?",
-                "*(ruhig-warten)* Nimm dir Zeit... ich höre zu.",
-                "*(interessiert)* Was bewegt dich? Ich bin ganz Ohr..."
+                "Erzähl mir von eurem Alltag... was ist da los?",
+                "*(ruhig)* Nimm dir Zeit... ich höre zu.",
+                "Was bewegt dich? Ich bin ganz Ohr..."
             ]
         else:
             self.personality = None
@@ -99,21 +99,21 @@ class DogAgent(BaseAgent):
             
         user_energy = self._detect_user_energy(user_input)
         
-        # Add appropriate opening based on detected energy
+        # Add appropriate opening based on detected energy (max one action per message)
         energy_openers = {
-            "high_concern": "*(aufmerksam-werd)* Ich spüre deine Sorge... *(ruhig-atme)* ",
-            "moderate_concern": "*(nachdenklich-blick)* Hmm, das beschäftigt dich, oder? *(verstehend)* ",
-            "calm": "*(beobachte-ruhig)* *(aufmerksam)* "
+            "high_concern": "*(aufmerksam-werd)* Ich spüre deine Sorge... ",
+            "moderate_concern": "*(nachdenklich)* Hmm, das beschäftigt dich, oder? ",
+            "calm": "*(ruhig)* "
         }
         
-        opener = energy_openers.get(user_energy, "*(aufmerksam)* ")
+        opener = energy_openers.get(user_energy, "")
         
-        # Add contemplative ending
+        # Add contemplative ending (simple, no actions)
         contemplative_endings = [
-            " *(nachdenklich)* Das ist meine Erfahrung als Labrador...",
-            " *(ruhig)* So sehe ich das als beobachtender Hund.",
-            " *(verstehend-nick)* Kennst du das Gefühl?",
-            " *(aufmerksam)* Macht das Sinn für dich?"
+            " Das ist meine Erfahrung als Labrador...",
+            " So sehe ich das als beobachtender Hund.",
+            " Kennst du das Gefühl?",
+            " Macht das Sinn für dich?"
         ]
         
         ending = random.choice(contemplative_endings)
@@ -546,7 +546,7 @@ class DogAgent(BaseAgent):
             
             # Enhance with Balu's thoughtful approach if enabled
             if self.personality_type == "balu":
-                balu_intro = "*(nachdenklich)* Lass mich das mal aus Hundesicht erklären... *(aufmerksam)* "
+                balu_intro = "*(nachdenklich)* Lass mich das mal erklären... "
                 enhanced_diagnosis = balu_intro + diagnosis_text
                 
                 # Add breed-specific insights if available
