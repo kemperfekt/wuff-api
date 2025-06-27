@@ -39,6 +39,7 @@ class PromptType(str, Enum):
     DOG_GREETING_FOLLOWUP = "dog.greeting.followup"
     DOG_PERSPECTIVE = "generation.dog_perspective"
     DOG_INSTINCT_DIAGNOSIS = "generation.instinct_diagnosis"
+    EXERCISE_TEMPLATE = "generation.exercise"
     DOG_ASK_FOR_MORE = "dog.ask.for.more"
     DOG_DIAGNOSIS_INTRO = "dog.diagnosis.intro"
     DOG_DIAGNOSIS = "dog.diagnosis"
@@ -76,6 +77,11 @@ class PromptType(str, Enum):
     INPUT_TOO_SHORT = "validation.input.too.short"
     NO_BEHAVIOR_MATCH = "validation.no.behavior.match"
     INVALID_YES_NO = "validation.invalid.yes.no"
+    
+    # System prompts
+    DOG_AGENT_SYSTEM = "generation.dog_agent_system"
+    BALU_AGENT_SYSTEM = "generation.balu_agent_system"
+    EXERCISE_SYSTEM = "generation.exercise_system"
     
     # Other prompts
     VALIDATION = "validation.input"
@@ -248,7 +254,29 @@ class PromptManager:
             key="generation.exercise",
             template=generation_prompts.EXERCISE_TEMPLATE,
             category=PromptCategory.DOG,
-            variables=["symptom", "match"]
+            variables=["symptom", "exercise_content"]
+        ))
+        
+        # System prompts
+        self.add_prompt(Prompt(
+            key="generation.dog_agent_system",
+            template=generation_prompts.DOG_AGENT_SYSTEM,
+            category=PromptCategory.DOG,
+            variables=[]
+        ))
+        
+        self.add_prompt(Prompt(
+            key="generation.balu_agent_system",
+            template=generation_prompts.BALU_AGENT_SYSTEM,
+            category=PromptCategory.DOG,
+            variables=[]
+        ))
+        
+        self.add_prompt(Prompt(
+            key="generation.exercise_system",
+            template=generation_prompts.EXERCISE_SYSTEM,
+            category=PromptCategory.DOG,
+            variables=[]
         ))
         
         # Query prompts

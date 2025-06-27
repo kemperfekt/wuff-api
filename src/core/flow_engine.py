@@ -15,7 +15,7 @@ from src.models.flow_models import FlowStep
 from src.models.session_state import SessionState
 from src.agents.base_agent import V2AgentMessage
 from src.core.exceptions import V2FlowError, V2ValidationError
-from src.core.flow_handlers import FlowHandlers
+from src.core.enhanced_flow_handlers import EnhancedFlowHandlers
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,13 @@ class FlowEvent(str, Enum):
     # Flow control
     START_SESSION = "start_session"
     CONTINUE_FLOW = "continue_flow"
+    
+    # Agentic flow events
+    AGENTIC_USER_INPUT = "agentic_user_input"
+    INFORMATION_COLLECTED = "information_collected"
+    PERSPECTIVE_GENERATED = "perspective_generated"
+    HANDOFF_ACCEPTED = "handoff_accepted"
+    HANDOFF_DECLINED = "handoff_declined"
 
 
 @dataclass
@@ -73,7 +80,7 @@ class FlowEngine:
     4. Coordinates V2 agents and services
     """
     
-    def __init__(self, flow_handlers: Optional[FlowHandlers] = None):
+    def __init__(self, flow_handlers: Optional[EnhancedFlowHandlers] = None):
         """
         Initialize flow engine with handlers.
         
@@ -83,7 +90,7 @@ class FlowEngine:
         self.logger = logging.getLogger(__name__)
         
         # Initialize handlers
-        self.handlers = flow_handlers or FlowHandlers()
+        self.handlers = flow_handlers or EnhancedFlowHandlers()
         
         # Store all defined transitions
         self.transitions: List[Transition] = []
@@ -109,9 +116,58 @@ class FlowEngine:
         self.add_transition(
             from_state=FlowStep.GREETING,
             event=FlowEvent.START_SESSION,
-            to_state=FlowStep.WAIT_FOR_SYMPTOM,
-            handler=self.handlers.handle_greeting,
-            description="Initial greeting -> wait for symptom description"
+            to_state=FlowStep.AGENTIC_COLLECTION,
+            handler=self.handlers.handle_greeting_to_agentic,
+            description="Initial greeting -> start agentic information collection"
+        )
+        
+        # ===========================================
+        # AGENTIC FLOW TRANSITIONS
+        # ===========================================
+        
+        # Information collection phase
+        self.add_transition(
+            from_state=FlowStep.AGENTIC_COLLECTION,
+            event=FlowEvent.AGENTIC_USER_INPUT,
+            to_state=FlowStep.AGENTIC_COLLECTION,  # Stay in collection or move to perspective
+            handler=self.handlers.handle_agentic_collection,
+            description="Process user input during agentic information collection"
+        )
+        
+        # Dog perspective generation
+        self.add_transition(
+            from_state=FlowStep.AGENTIC_COLLECTION,
+            event=FlowEvent.INFORMATION_COLLECTED,
+            to_state=FlowStep.DOG_PERSPECTIVE,
+            handler=self.handlers.handle_perspective_generation,
+            description="Generate dog perspective after all information collected"
+        )
+        
+        # Handoff decision
+        self.add_transition(
+            from_state=FlowStep.DOG_PERSPECTIVE,
+            event=FlowEvent.PERSPECTIVE_GENERATED,
+            to_state=FlowStep.HANDOFF_DECISION,
+            handler=self.handlers.handle_handoff_question,
+            description="Ask user if they want to continue to full flow"
+        )
+        
+        # Handoff accepted - continue with pure agentic flow
+        self.add_transition(
+            from_state=FlowStep.HANDOFF_DECISION,
+            event=FlowEvent.HANDOFF_ACCEPTED,
+            to_state=FlowStep.AGENTIC_COLLECTION,
+            handler=self.handlers.handle_enhanced_agentic_collection,
+            description="User wants to continue - stay in agentic flow for instinct analysis"
+        )
+        
+        # Handoff declined - end session
+        self.add_transition(
+            from_state=FlowStep.HANDOFF_DECISION,
+            event=FlowEvent.HANDOFF_DECLINED,
+            to_state=FlowStep.END_OR_RESTART,
+            handler=self.handlers.handle_handoff_declined,
+            description="User doesn't want to continue - end gracefully"
         )
         
         # ===========================================
@@ -566,6 +622,38 @@ class FlowEngine:
                 # Stay in same state, don't transition
                 self.logger.info(f"Staying in current state: {current_state.value}")
                 return current_state, messages
+            elif next_event in ['information_collected', 'perspective_generated', 'handoff_accepted']:
+                # Agentic agent phase transitions - trigger additional FSM event
+                if next_event == 'information_collected':
+                    self.logger.info("Processing INFORMATION_COLLECTED - moving to DOG_PERSPECTIVE")
+                    session.current_step = FlowStep.DOG_PERSPECTIVE
+                    # Generate dog perspective
+                    perspective_messages = await self.handlers.handle_perspective_generation(session, "", context)
+                    messages.extend(perspective_messages)
+                    
+                    # Check if perspective generation triggered next event
+                    if context.get('next_event') == 'perspective_generated':
+                        self.logger.info("Chaining PERSPECTIVE_GENERATED - moving to HANDOFF_DECISION")
+                        session.current_step = FlowStep.HANDOFF_DECISION
+                        # DON'T generate handoff question here - enhanced agent already included it
+                        self.logger.info("Skipping handoff question generation - already included in perspective message")
+                        return FlowStep.HANDOFF_DECISION, messages
+                    
+                    return FlowStep.DOG_PERSPECTIVE, messages
+                elif next_event == 'perspective_generated':
+                    self.logger.info("Processing PERSPECTIVE_GENERATED - moving to HANDOFF_DECISION")
+                    session.current_step = FlowStep.HANDOFF_DECISION
+                    # Check if messages already contain perspective + handoff question
+                    if messages and any('Möchtest du' in msg.text or 'mehr' in msg.text.lower() for msg in messages):
+                        self.logger.info("Handoff question already included in messages - skipping duplicate")
+                        return FlowStep.HANDOFF_DECISION, messages
+                    # Generate handoff question only if not already present
+                    handoff_messages = await self.handlers.handle_handoff_question(session, "", context)
+                    messages.extend(handoff_messages)
+                    return FlowStep.HANDOFF_DECISION, messages
+                elif next_event == 'handoff_accepted':
+                    self.logger.info("Processing HANDOFF_ACCEPTED - normal transition handling")
+                    # Let normal transition handling take care of this
             
             # Update session state
             old_state = session.current_step
@@ -607,7 +695,21 @@ class FlowEngine:
             return FlowEvent.RESTART_COMMAND
         
         # State-specific classification
-        if current_state == FlowStep.WAIT_FOR_SYMPTOM:
+        
+        # Agentic flow states
+        if current_state == FlowStep.AGENTIC_COLLECTION:
+            return FlowEvent.AGENTIC_USER_INPUT
+        elif current_state == FlowStep.HANDOFF_DECISION:
+            # Check for yes/no responses for handoff decision
+            if any(word in user_input for word in ["ja", "yes", "gerne", "weiter", "mehr"]):
+                return FlowEvent.HANDOFF_ACCEPTED
+            elif any(word in user_input for word in ["nein", "no", "nicht", "später"]):
+                return FlowEvent.HANDOFF_DECLINED
+            else:
+                return FlowEvent.AGENTIC_USER_INPUT  # Let agent handle unclear responses
+        
+        # Regular flow states
+        elif current_state == FlowStep.WAIT_FOR_SYMPTOM:
             return FlowEvent.USER_INPUT
         
         elif current_state == FlowStep.WAIT_FOR_CONFIRMATION:

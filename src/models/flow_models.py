@@ -4,6 +4,13 @@ from enum import Enum
 
 class FlowStep(str, Enum):
     GREETING = "greeting"
+    
+    # New agentic flow states
+    AGENTIC_COLLECTION = "agentic_collection"
+    DOG_PERSPECTIVE = "dog_perspective"
+    HANDOFF_DECISION = "handoff_decision"
+    
+    # Existing static flow states
     WAIT_FOR_SYMPTOM = "wait_for_symptom"
     SYMPTOM_ACK = "symptom_ack"
     ASK_DIAGNOSE = "ask_diagnose"
