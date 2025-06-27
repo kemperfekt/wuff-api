@@ -1,5 +1,5 @@
 # Main dependencies with security-pinned versions
-# Updated: 2025-01-06 for security compliance
+# Updated: 2025-06-27 for security compliance - Fixed CVE-2025-47273, CVE-2025-47272, CVE-2025-43859
 
 # Core web framework
 fastapi==0.115.12
