@@ -1,6 +1,8 @@
 # requirements-dev.txt
-pytest
-pytest-cov
+# Updated: 2025-06-27 for security compliance
+pytest==8.4.1
+pytest-cov==6.1.1
+pytest-asyncio==1.0.0
 pact-python>=1.0.0
-requests
-pact-python>=1.0.0
+requests==2.32.4
+safety>=3.5.2
