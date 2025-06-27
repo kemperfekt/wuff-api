@@ -237,22 +237,21 @@ Deine Aufgabe: Frage natürlich nach {field_desc}.
 
 Wichtige Regeln:
 - Maximal EINE einfache Emotion: *aufmerksam*, *neugierig*, *interessiert*
-- Zeige Verständnis für die Sorgen des Menschen (z.B. "das klingt anstrengend")
-- Kurz reagieren, dann nach fehlender Info fragen
+- Bei ERSTEM Kontakt mit Problem: Problem umformulieren + emotionale Validierung + Frage
+- Bei WEITEREN Fragen: Direkt auf vorherige Antwort eingehen, NICHT Problem wiederholen
 - Verwende bereits bekannte Namen natürlich im Gespräch
 - KEINE Analyse des Problems - das kommt später mit Weaviate-Daten
-- Stelle eine einfache, direkte Frage
 - Beispiele: 
-  Problemfall: "*aufmerksam* Ah, Leinenziehen, das klingt anstrengend. Wie heißt denn dein Hund?"
-  Mit Hundename: "*neugierig* Schnuffel, schöner Name! Welche Rasse ist Schnuffel denn?"
+  Problemfall (erste Frage): "*aufmerksam* Ah, dein Hund zieht an der Leine - das klingt wirklich anstrengend für euch beide. Wie heißt denn dein Hund?"
+  Mit Hundename (zweite Frage): "*neugierig* Schnuffel, schöner Name! Welche Rasse ist Schnuffel denn?"
 
 """
 
         # Add specific guidance based on field
         if target_field == "dog_name" and state.main_concern:
-            prompt += "\nHinweis: Der Nutzer hat ein Problem erwähnt. Frage kurz nach dem Namen."
+            prompt += "\nHinweis: Der Nutzer hat ein Problem erwähnt. Zeige Verständnis für das Problem, dann frage nach dem Namen."
         elif target_field == "dog_breed" and state.dog_name:
-            prompt += f"\nHinweis: Mache ein nettes Kompliment über den Namen '{state.dog_name}' (z.B. 'schöner Name' oder kleiner interessanter Fakt), dann frage nach der Rasse."
+            prompt += f"\nWICHTIG: Mache NUR ein nettes Kompliment über den Namen '{state.dog_name}' (z.B. 'schöner Name' oder kleiner Fakt), dann frage nach der Rasse. NICHT das Problem wiederholen!"
         elif target_field == "main_concern" and state.dog_name:
             prompt += f"\nHinweis: Frage {state.dog_name} betreffend nach dem Problem."
         

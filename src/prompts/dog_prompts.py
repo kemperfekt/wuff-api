@@ -23,7 +23,7 @@ NEED_MORE_DETAIL = """Kannst Du das bitte etwas ausführlicher beschreiben?"""
 ASK_FOR_MORE = """Magst Du mehr davon erfahren, warum ich mich so verhalte?"""
 
 # When user confirms they want more information
-CONTEXT_QUESTION = """Gut, dann brauche ich noch ein paar Informationen. Wie kam es zu der Situation? Wer war dabei und wo ist es passiert?"""
+CONTEXT_QUESTION = """*aufmerksam* Gut, dann brauche ich noch ein paar Informationen. Wie kam es zu der Situation? Wer war dabei und wo ist es passiert?"""
 
 # Not enough context provided
 NEED_MORE_CONTEXT = """Ich brauche noch ein bisschen mehr Info… Wo war das genau, was war da los?"""

@@ -105,27 +105,89 @@ class WeaviatePerspectiveTool(BaseTool):
             return None
     
     async def _get_breed_context(self, breed: str) -> Optional[Dict[str, Any]]:
-        """Retrieve breed-specific insights from Weaviate"""
+        """Retrieve breed-specific insights via Rassen -> gruppen_code -> Instinktveranlagung"""
         try:
-            # Search in Rassen collection
-            results = await self.weaviate.search(
+            # Step 1: Search for the specific breed in "Rassen" collection
+            breed_results = await self.weaviate.search(
                 collection="Rassen", 
                 query=breed,
                 limit=1,
-                return_metadata=True  # Include distance for quality assessment
+                return_metadata=True
             )
             
-            if results and len(results) > 0:
-                # Check if the match is good enough (distance < 0.8 means good match)
-                result = results[0]
-                distance = result.get('metadata', {}).get('distance', 1.0)
-                if distance < 0.8:  # Good match threshold
-                    return result
-                else:
-                    self.logger.info(f"Breed match too weak (distance: {distance}) for: {breed}")
+            if not breed_results or len(breed_results) == 0:
+                self.logger.info(f"No breed found in Rassen collection for: {breed}")
+                return None
+            
+            breed_result = breed_results[0]
+            distance = breed_result.get('metadata', {}).get('distance', 1.0)
+            if distance >= 0.8:  # Poor match
+                self.logger.info(f"Breed match too weak (distance: {distance}) for: {breed}")
+                return None
+            
+            # Step 2: Get the gruppen_code from the breed result properties
+            # Weaviate returns data in the 'properties' field
+            breed_properties = breed_result.get('properties', breed_result)
+            self.logger.info(f"Breed result structure: {list(breed_result.keys())}")
+            self.logger.info(f"Breed properties: {list(breed_properties.keys()) if isinstance(breed_properties, dict) else 'Not a dict'}")
+            
+            gruppen_code = breed_properties.get('gruppen_code', '')
+            if not gruppen_code:
+                self.logger.info(f"No gruppen_code found for breed: {breed}. Available properties: {list(breed_properties.keys()) if isinstance(breed_properties, dict) else breed_properties}")
+                return None
+            
+            self.logger.info(f"Found breed {breed} with gruppen_code: {gruppen_code}")
+            
+            # Step 3: Find the exact gruppen_code match in "Instinktveranlagung" collection
+            try:
+                # First try semantic search with the gruppen_code
+                instinct_results = await self.weaviate.search(
+                    collection="Instinktveranlagung", 
+                    query=str(gruppen_code),  # Convert to string for search
+                    limit=10,  # Get more results to find exact match
+                    return_metadata=True
+                )
                 
-            self.logger.info(f"No good breed data found for: {breed}")
-            return None
+                # Look for exact gruppen_code match in results
+                exact_match = None
+                for result in instinct_results:
+                    # Access properties correctly
+                    result_properties = result.get('properties', result)
+                    result_code = result_properties.get('gruppen_code', '')
+                    self.logger.info(f"Checking result with gruppen_code: {result_code} against target: {gruppen_code}")
+                    if str(result_code) == str(gruppen_code):
+                        exact_match = result_properties  # Return the properties, not the wrapper
+                        self.logger.info(f"Found exact match for gruppen_code: {gruppen_code}")
+                        break
+                
+                if exact_match:
+                    return exact_match
+                else:
+                    self.logger.info(f"No exact match found for gruppen_code: {gruppen_code}")
+                    
+                    # Fallback: Try searching with a more specific query format
+                    # Some Weaviate setups might need different query approaches
+                    fallback_results = await self.weaviate.search(
+                        collection="Instinktveranlagung",
+                        query=f"gruppen_code:{gruppen_code}",
+                        limit=1,
+                        return_metadata=True
+                    )
+                    
+                    if fallback_results and len(fallback_results) > 0:
+                        result = fallback_results[0]
+                        result_properties = result.get('properties', result)
+                        found_code = result_properties.get('gruppen_code', '')
+                        if str(found_code) == str(gruppen_code):
+                            self.logger.info(f"Found match via fallback search for gruppen_code: {gruppen_code}")
+                            return result_properties
+                    
+                    self.logger.info(f"No Instinktveranlagung found for gruppen_code: {gruppen_code}")
+                    return None
+                    
+            except Exception as search_error:
+                self.logger.warning(f"Error searching Instinktveranlagung for gruppen_code {gruppen_code}: {search_error}")
+                return None
             
         except Exception as e:
             self.logger.warning(f"Failed to retrieve breed context: {e}")
@@ -138,9 +200,19 @@ class WeaviatePerspectiveTool(BaseTool):
                                   user_name: Optional[str],
                                   symptom_data: Optional[Dict[str, Any]],
                                   breed_context: Optional[Dict[str, Any]]) -> str:
-        """Generate Balu's perspective using GPT"""
+        """Generate Balu's perspective with optional breed comment"""
         
-        # Build the prompt with available context
+        # 1. Generate breed comment if we have breed context and it's not "Mischling"
+        breed_comment = ""
+        self.logger.info(f"Breed context check: breed='{dog_breed}', has_context={bool(breed_context)}")
+        if breed_context:
+            self.logger.info(f"Breed context keys: {list(breed_context.keys())}")
+        
+        if breed_context and dog_breed.lower() not in ["mischling", "mix", "mischlingsrüde", "mischlingshündin"]:
+            breed_comment = await self._generate_breed_comment(dog_breed, breed_context)
+            self.logger.info(f"Generated breed comment: '{breed_comment}'")
+        
+        # 2. Build the main perspective prompt
         prompt = self._build_perspective_prompt(
             symptom=symptom,
             dog_name=dog_name,
@@ -151,7 +223,7 @@ class WeaviatePerspectiveTool(BaseTool):
         )
         
         try:
-            # Use GPT-4o-mini for cost efficiency
+            # 3. Generate the main perspective
             response = await self.gpt.complete(
                 prompt=prompt,
                 model="gpt-4o-mini",
@@ -159,7 +231,13 @@ class WeaviatePerspectiveTool(BaseTool):
                 temperature=0.7
             )
             
-            return response.strip()
+            perspective = response.strip()
+            
+            # 4. Combine breed comment with perspective
+            if breed_comment:
+                return f"{breed_comment}\n\n{perspective}"
+            else:
+                return perspective
             
         except Exception as e:
             raise ToolError(
@@ -167,6 +245,56 @@ class WeaviatePerspectiveTool(BaseTool):
                 message=f"GPT generation failed: {str(e)}",
                 details={"prompt_length": len(prompt)}
             )
+    
+    async def _generate_breed_comment(self, dog_breed: str, breed_context: Dict[str, Any]) -> str:
+        """Extract and summarize breed comment from Weaviate Hundeperspektive field"""
+        
+        # Get the Hundeperspektive field from Instinktveranlagung data
+        hundeperspektive = breed_context.get('hundeperspektive', '')
+        
+        self.logger.info(f"Hundeperspektive for {dog_breed}: '{hundeperspektive[:100]}...' (available fields: {list(breed_context.keys())})")
+        
+        if not hundeperspektive:
+            # No breed perspective available
+            self.logger.warning(f"No Hundeperspektive found for breed: {dog_breed}")
+            return ""
+        
+        # Summarize to 1-2 sentences that describe the nature of this breed group
+        summary_prompt = f"""Du bist Balu. Fasse die Hundeperspektive für die Rasse {dog_breed} in 1-2 Sätzen zusammen.
+
+Original Hundeperspektive: {hundeperspektive}
+
+Deine Aufgabe: Erstelle eine kurze Zusammenfassung, die die Natur und Eigenschaften dieser Rasse beschreibt.
+
+Stil:
+- Beginne mit "*aufmerksam*" oder "*interessiert*"
+- 1-2 Sätze über die wichtigsten Eigenschaften der Rasse
+- Positiv und informativ formuliert
+- Verwende "diese Rasse" oder "{dog_breed}"
+
+Beispiel: "*interessiert* Diese Rasse ist bekannt für ihre ausgeprägte Wachsamkeit und ihren starken Schutzinstinkt."
+
+Deine Zusammenfassung:"""
+
+        try:
+            summary = await self.gpt.complete(
+                prompt=summary_prompt,
+                model="gpt-4o-mini",
+                max_tokens=80,  # Keep it short - 1-2 sentences
+                temperature=0.7
+            )
+            
+            return summary.strip()
+            
+        except Exception as e:
+            # Fallback: Use first 2 sentences of original if GPT fails
+            self.logger.warning(f"Breed comment summarization failed: {e}")
+            sentences = hundeperspektive.split('.')
+            if len(sentences) >= 2:
+                fallback = '. '.join(sentences[:2]).strip() + '.'
+                return f"*aufmerksam* {fallback}"
+            else:
+                return f"*aufmerksam* {hundeperspektive.strip()}"
     
     def _build_perspective_prompt(self,
                                 symptom: str,
