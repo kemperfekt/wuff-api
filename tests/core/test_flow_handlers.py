@@ -43,19 +43,19 @@ class TestGreetingHandler:
     
     @pytest.mark.asyncio
     async def test_greeting_handler_error(self, sample_session, mock_services_bundle):
-        """Test greeting handler with agent error"""
+        """Test greeting handler with agent error - now handles gracefully"""
         # Setup failing dog agent
         failing_dog_agent = AsyncMock()
         failing_dog_agent.respond.side_effect = Exception("Agent failed")
         
         handlers = FlowHandlers(dog_agent=failing_dog_agent)
         
-        # Execute & Verify exception
-        with pytest.raises(V2FlowError) as exc_info:
-            await handlers.handle_greeting(sample_session, "", {})
+        # Execute - should not raise exception anymore
+        messages = await handlers.handle_greeting(sample_session, "", {})
         
-        assert "Failed to generate greeting" in str(exc_info.value)
-        assert exc_info.value.current_state == "GREETING"
+        # Verify we get messages even on error
+        assert len(messages) >= 1
+        assert isinstance(messages[0], V2AgentMessage)
 
 
 @pytest.mark.unit  

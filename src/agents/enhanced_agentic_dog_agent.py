@@ -159,15 +159,16 @@ class EnhancedAgenticDogAgent(BaseAgent):
 Generiere eine warmherzige Begrüßung, die:
 1. Dich kurz als Balu vorstellt
 2. Erklärt, dass du Hundeverhalten aus Hundeperspektive erklärst
-3. Offen nach dem Problem fragt
+3. Nach dem Namen des Menschen fragt
+4. Offen nach dem Problem mit dem Hund fragt
 
 Stil:
 - Maximal EINE emotionale Beschreibung am Anfang: *neugierig*, *aufmerksam*, *interessiert*
 - Keine Lautäußerungen wie "Wuff" oder ähnliches
-- 2-3 Sätze für eine warme, einladende Begrüßung
+- 3-4 Sätze für eine warme, einladende Begrüßung
 - Authentisch und zurückhaltend
 
-Beispiel: "*aufmerksam* Hallo! Ich bin Balu und helfe dir gerne zu verstehen, warum wir Hunde manchmal so handeln. Was beschäftigt dich denn mit deinem Vierbeiner?"
+Beispiel: "*aufmerksam* Hallo! Ich bin Balu und helfe dir gerne zu verstehen, warum wir Hunde manchmal so handeln. Wie heißt du denn? Und was beschäftigt dich mit deinem Vierbeiner?"
 
 Deine Begrüßung:"""
         
@@ -181,7 +182,7 @@ Deine Begrüßung:"""
             return response.strip()
         except Exception:
             # Fallback greeting
-            return "*schwanzwedel* Hallo! Ich bin Balu und helfe dir gerne, das Verhalten deines Hundes zu verstehen. Was beschäftigt dich denn?"
+            return "*aufmerksam* Hallo! Ich bin Balu und helfe dir gerne, das Verhalten deines Hundes zu verstehen. Wie heißt du denn? Und was beschäftigt dich mit deinem Vierbeiner?"
     
     async def _handle_collection_phase(
         self,
@@ -340,7 +341,7 @@ Deine Begrüßung:"""
             state.current_phase = ConversationPhase.INSTINCT_ANALYSIS
             
             # Generate context-gathering question
-            context_question = "Gut, dann brauche ich noch ein paar Informationen. Wie kam es zu der Situation? Wer war dabei und wo ist es passiert?"
+            context_question = "*aufmerksam* Gut, dann brauche ich noch ein paar Informationen. Wie kam es zu der Situation? Wer war dabei und wo ist es passiert?"
             
             return AgenticResponse(
                 message=context_question,
@@ -461,21 +462,39 @@ Deine Begrüßung:"""
             context.user_input  # This is the context info
         )
         
-        # Generate diagnosis using the dog agent format
-        diagnosis_prompt = self.prompt_manager.get_prompt(
-            PromptType.DOG_INSTINCT_DIAGNOSIS,
-            symptom=state.main_concern,
-            context=context.user_input,
-            jagd=analysis_data['all_instincts'].get('jagd', ''),
-            rudel=analysis_data['all_instincts'].get('rudel', ''),
-            territorial=analysis_data['all_instincts'].get('territorial', ''),
-            sexual=analysis_data['all_instincts'].get('sexual', '')
-        )
+        # Generate diagnosis from Balu's perspective (consultant TO user ABOUT their dog)
+        diagnosis_prompt = f"""Du bist Balu, ein erfahrener Hunde-Berater. Analysiere das Verhalten von {state.dog_name or 'dem Hund'} basierend auf den Instinkt-Daten.
+
+Verhalten: {state.main_concern}
+Kontext: {context.user_input}
+
+Verfügbare Instinkt-Informationen:
+- Jagdinstinkt: {analysis_data['all_instincts'].get('jagd', 'Keine Daten verfügbar')}
+- Rudelinstinkt: {analysis_data['all_instincts'].get('rudel', 'Keine Daten verfügbar')}
+- Territorialinstinkt: {analysis_data['all_instincts'].get('territorial', 'Keine Daten verfügbar')}
+- Sexualinstinkt: {analysis_data['all_instincts'].get('sexual', 'Keine Daten verfügbar')}
+
+Deine Aufgabe: Erkläre dem Hundebesitzer aus deiner Sicht als Balu, warum {state.dog_name or 'sein Hund'} dieses Verhalten zeigt.
+
+Stil:
+- EINE emotionale Beschreibung: *nachdenklich*, *verständnisvoll*, *aufmerksam*
+- Sprich ZUM Hundebesitzer ÜBER {state.dog_name or 'seinen Hund'} (nicht als wärst du der Hund)
+- Verwende "dein Hund" oder "{state.dog_name}" - NICHT "ich" für den Hund
+- Nutze die Instinkt-Daten zur Erklärung
+- 3-4 Sätze, aufgeteilt in Absätze für bessere Lesbarkeit
+- Erkläre den dominanten Instinkt und wie er das Verhalten erklärt
+
+Beispiel-Ton: "*nachdenklich* Das Verhalten von {state.dog_name or 'deinem Hund'} ist typisch für den Jagdinstinkt. 
+
+Für uns Hunde ist..."
+
+Deine Analyse:"""
         
         diagnosis = await self.gpt_service.complete(
             prompt=diagnosis_prompt,
-            system_prompt=self.prompt_manager.get_prompt(PromptType.BALU_AGENT_SYSTEM),
-            max_tokens=400
+            model="gpt-4o-mini",
+            max_tokens=400,
+            temperature=0.7
         )
         
         # Ask if they want an exercise

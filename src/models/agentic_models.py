@@ -10,7 +10,9 @@ class ConversationPhase(str, Enum):
     COLLECTING = "collecting"  # Still gathering information
     PERSPECTIVE = "perspective"  # Generating dog perspective
     HANDOFF = "handoff"  # Ready to hand off to static flow
-    COMPLETED = "completed"  # Handoff completed
+    INSTINCT_ANALYSIS = "instinct_analysis"  # Analyzing root instinct
+    EXERCISE_OFFER = "exercise_offer"  # Offering training plan
+    COMPLETED = "completed"  # Flow completed
 
 
 class InformationStatus(BaseModel):
