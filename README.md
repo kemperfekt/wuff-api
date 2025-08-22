@@ -1,109 +1,59 @@
-# DogBot Agent (Backend API)
+# WuffChat Backend API
 
-This is the backend API service for DogBot. For comprehensive documentation, please refer to the [main DogBot README](https://github.com/kemperfekt/dogbot).
+> **Current Status**: Stable V2 in production | V3 agentic architecture in development
 
-## Quick Links
+FastAPI backend service powering WuffChat - providing AI-driven dog behavior consultation through GPT-4 integration.
 
-- 📚 [Full Documentation](https://github.com/kemperfekt/dogbot)
-- 🏗️ [Architecture Overview](https://github.com/kemperfekt/dogbot#-architecture-overview)
-- 🚀 [Quick Start Guide](https://github.com/kemperfekt/dogbot#-quick-start)
-- 🔧 [Development Setup](https://github.com/kemperfekt/dogbot#-development)
-- 📊 [API Documentation](https://api.wuffchat.de/docs)
-
-## Local Development
+## Quick Start
 
 ```bash
-# Setup
+# Setup virtual environment
 python -m venv venv
 source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Run
+# Run server
 uvicorn src.main:app --reload --port 8000
+```
 
-# Test
-pytest
+## Technical Stack
+
+- **Framework**: FastAPI with Python 3.11+
+- **AI Model**: GPT-4 for natural language processing
+- **Knowledge Base**: Weaviate vector database
+- **Architecture**: V2 FSM (Finite State Machine) with 11 conversation states
+
+## API Endpoints (V2)
+
+```
+POST /flow_intro    - Start new conversation session
+POST /flow_step     - Send message and receive response
+GET  /health        - Service health check
+GET  /docs          - Interactive API documentation
 ```
 
 ## Key Features
-- V2 FSM-based architecture
-- GPT-4 powered responses from dog's perspective
-- Weaviate vector search integration
-- 11-state conversation flow
-- Comprehensive test coverage
-- Enterprise-grade security implementation
 
-## 🔒 Security Architecture
+- FSM-based conversation flow management
+- Dog perspective response generation
+- Session management with secure tokens
+- Rate limiting and security headers
+- Comprehensive error handling
 
-DogBot implements comprehensive security measures to protect user data and prevent abuse:
+## Security
 
-### Authentication & Authorization
-- **API Key Authentication**: All protected endpoints require X-API-Key header
-- **Environment-based Keys**: Secure API key management with auto-generation for development
-- **Public Endpoint Protection**: Health checks and docs remain accessible
+- API key authentication (X-API-Key header)
+- Session tokens with 30-minute expiration
+- Rate limiting: 10 req/min (intro), 30 req/min (messages)
+- CORS protection and security headers
 
-### Session Security
-- **Secure Session Tokens**: 32-byte URL-safe tokens beyond simple UUIDs
-- **Session Expiration**: 30-minute automatic timeout with activity refresh
-- **Token Validation**: Cryptographically secure token comparison using `secrets.compare_digest()`
-- **Automatic Cleanup**: Expired sessions are automatically purged every 5 minutes
+## Full Documentation
 
-### Rate Limiting
-- **IP-based Limiting**: Powered by slowapi with proxy support for Scalingo
-- **Endpoint-specific Limits**: 
-  - `/flow_intro`: 10 requests/minute  
-  - `/flow_step`: 30 requests/minute
-- **Custom Error Messages**: User-friendly German rate limit messages
-- **Rate Limit Headers**: X-RateLimit-* headers for client awareness
+For architecture details, security implementation, and development roadmap:  
+**[-> View Complete Documentation](https://github.com/kemperfekt/dogbot)**
 
-### Error Handling & Information Security
-- **Error Message Sanitization**: Generic user messages, detailed internal logging
-- **Safe Error Responses**: No sensitive data (API keys, paths, internal errors) exposed
-- **Structured Error Handling**: Consistent error format across all endpoints
+---
 
-### Security Headers
-- **X-Frame-Options**: DENY (prevents clickjacking)
-- **X-Content-Type-Options**: nosniff (prevents MIME sniffing)  
-- **Strict-Transport-Security**: HSTS for HTTPS enforcement
-- **X-XSS-Protection**: Browser XSS filter enabled
-- **Referrer-Policy**: strict-origin-when-cross-origin
-- **Permissions-Policy**: Restricts geolocation, microphone, camera access
-- **Server Header Removal**: Hides technology stack information
-
-### CORS & Network Security
-- **Environment-aware CORS**: Localhost blocked in production, allowed in development
-- **Production Domain Whitelist**: Only trusted domains allowed in production
-- **Credential Support**: Secure cross-origin authentication enabled
-
-### Input Validation
-- **Pydantic Models**: Runtime type validation for all API inputs
-- **Session ID Validation**: Format and existence verification
-- **Message Length Limits**: Prevents oversized inputs
-
-### Monitoring & Compliance
-- **Security Event Logging**: Authentication failures, rate limit violations logged
-- **Audit Trail**: All security events tracked with timestamps and IPs
-- **Test Coverage**: Comprehensive security test suite in `tests/test_security.py`
-
-### Security Testing
-```bash
-# Run security tests
-pytest tests/test_security.py -v
-
-# Test session security specifically  
-python tests/test_session_security.py
-```
-
-### Production Security Checklist
-- ✅ API authentication with secure key rotation
-- ✅ Rate limiting with appropriate thresholds
-- ✅ Session security with token-based auth
-- ✅ Error message sanitization
-- ✅ Security headers implemented
-- ✅ CORS properly configured for production
-- ⚠️ Input validation (basic implementation, HTML sanitization pending)
-- ⚠️ Security monitoring (logging implemented, alerting pending)
-
-For detailed security audit results, see `.CLAUDE_CONTENT/INFRASTRUCTURE/SECURITY_AUDIT.md`.
-
-For detailed information, see the [main repository documentation](https://github.com/kemperfekt/dogbot).
+Part of the WuffChat ecosystem - see [wuffchat](https://github.com/kemperfekt/wuffchat) for overview.
