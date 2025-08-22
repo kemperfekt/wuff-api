@@ -1,7 +1,3 @@
 *.py linguist-language=Python
-*.roff linguist-documentation
-*.1 linguist-documentation
-*.3 linguist-documentation
-*.7 linguist-documentation
-docs/* linguist-documentation
-man/* linguist-documentation
+logs/* linguist-generated
+*.log.* linguist-generated
