@@ -28,7 +28,7 @@ assets/
 tech_strategy.md
 modules.png
 .CLAUDE_CONTENT/
-CLAUDE.md
+.CLAUDE.md
 deployment-log.txt
 Archive
 generation_prompts_old.py
